@@ -107,4 +107,4 @@ Se partió de unos documentos de origen (inventario, especificación v2 y su an�
 
 ## Licencia
 
-Este repositorio todavía **no tiene una licencia de código abierto elegida**: por ahora todos los derechos están reservados. Las licencias de las dependencias de terceros están en [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+El código de este repositorio se publica bajo la [licencia MIT](LICENSE). Las licencias de las dependencias de terceros están en [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
