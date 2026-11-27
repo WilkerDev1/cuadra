@@ -111,16 +111,26 @@
 .set-row__link { color: inherit; text-decoration: none; align-self: stretch; }
 .set-row__link:focus-visible { outline-offset: -2px; }
 @media (hover: hover) { .set-row__link:hover .set-row__title { text-decoration: underline; text-underline-offset: 0.2em; } }
-.set-row__title { font-weight: var(--w-medium); }
+.set-row__title { font-weight: var(--w-medium); overflow-wrap: anywhere; }
+.set-row__meta { overflow-wrap: anywhere; }
+/* Los nombres pueden ocupar varias líneas: la raya va en cada fila, no en un fondo de renglones fijos. */
+.set-orderable .ui-ledger { background-image: none; }
+.set-orderable .set-row { padding-block: var(--s-1); border-block-end: var(--bw) solid var(--rule); }
 /* Con ratón la fila mide --fila (40px): una sola línea, título y meta al lado. */
 @media (pointer: fine) {
   .set-row__text { flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--s-3); }
-  .set-row__title { flex: none; max-inline-size: 60%; }
-  .set-row__meta { min-inline-size: 0; }
+  .set-row__title { flex: none; max-inline-size: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .set-row__meta { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 .set-row__meta { font-size: var(--t-meta); color: var(--ink-3); }
 .set-reorder { display: inline-flex; flex: none; }
 .set-seg { inline-size: fit-content; max-inline-size: 100%; }
+.set-ordertoggle { display: none; }
+/* Estrecho: ↑ ↓ solo en modo «Ordenar»; el nombre del campo gana el ancho. */
+@container setbody (width < 30rem) {
+  .set-ordertoggle { display: flex; justify-content: flex-end; }
+  .set-orderable:not([data-ordering]) .set-reorder { display: none; }
+}
 .set-reorder:empty { inline-size: calc(var(--target) * 2); }
 @media (pointer: fine) { .set-reorder:empty { inline-size: 5rem; } }
 

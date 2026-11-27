@@ -15,6 +15,7 @@ import { filterChips } from '../logic/filterChips';
 import { normalizeFilter, sameFilter } from '../../../app/data/txFilterUrl';
 import { useCurrency, useFetchAll, useLookups } from '../data';
 import { FilterSheet } from './FilterSheet';
+import { saveFile } from '../../../app/data/download';
 
 const PRESETS = ['today', 'this_week', 'this_month', 'last_month', 'last_30_days', 'this_quarter', 'this_year', 'last_year', 'all'] as const;
 
@@ -116,15 +117,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (text: string
 // ── Exportar ─────────────────────────────────────────────────────────────────────────
 
 function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.rel = 'noopener';
-  document.body.append(a);
-  a.click();
-  a.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  void saveFile(blob, name);
 }
 
 function ExportMenu({ filter, name }: { filter: TxFilter; name: string }) {

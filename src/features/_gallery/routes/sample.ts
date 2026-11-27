@@ -1,6 +1,6 @@
 // Datos de ejemplo de la galería (rotulados «Ejemplo» en pantalla). Montos en unidad menor.
 import type { Field } from '../../../core/types';
-import type { BarDatum, DayFlow, DonutDatum, LinePoint } from '../../../ui';
+import type { BarDatum, DayFlow, LinePoint } from '../../../ui';
 
 export const TODAY = '2026-11-26';
 
@@ -36,12 +36,6 @@ export const BARS: BarDatum[] = [
   { id: 'a', label: 'Alquiler', minor: 3500000, kind: 'out' },
   { id: 's', label: 'Servicios', minor: 1180000, kind: 'out' },
   { id: 'i', label: 'Impuestos', minor: 960000, kind: 'out' },
-];
-
-export const DONUT: DonutDatum[] = [
-  { id: 'd', label: 'Diseño', minor: 12400000, tint: 'var(--tint-1)' },
-  { id: 'p', label: 'Producción', minor: 8100000, tint: 'var(--tint-3)' },
-  { id: 'a', label: 'Administración', minor: 4300000, tint: 'var(--tint-7)' },
 ];
 
 export const LINE: LinePoint[] = ['dic', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov'].map((label, i) => ({

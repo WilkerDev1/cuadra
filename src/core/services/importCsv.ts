@@ -24,10 +24,12 @@ import {
   type WorkspaceRecord,
 } from '../sql/rows';
 import { editDistance, normalizeSearch } from '../text';
+import { csvSafeText, csvUnsafeText } from '../export/tabular';
 import type { Currency, Direction, Field, FieldValue, FieldValues, Id, IsoDate, Minor, Mutation, Warning } from '../types';
 import { mutate, readTx, type CoreDeps } from '../uow';
 import type { OpeningInput } from './accounts';
 import { createTransactionsService, type CreateManyDraft, type TxDraft } from './transactions';
+import { charLength, MAX_DESCRIPTION_LENGTH, MAX_NOTES_LENGTH } from './validation';
 
 // ── Tipos ────────────────────────────────────────────────────────────────────────────
 
@@ -206,7 +208,9 @@ export function tableFromRows(
   const headerRowIndex = opts.headerRow ?? findHeaderRow(rows);
   const headerCells = rows[headerRowIndex] ?? [];
   const body = rows.slice(headerRowIndex + 1);
-  const width = Math.max(headerCells.length, ...body.map((r) => r.length));
+  // Bucle y no Math.max(...body): esparcir 120 000+ filas en argumentos desborda la pila.
+  let width = headerCells.length;
+  for (const r of body) if (r.length > width) width = r.length;
   const headers = Array.from({ length: width }, (_, i) => cellToText(headerCells[i]).trim());
   const source = opts.source ?? 'xlsx';
   const pad: Cell = source === 'csv' ? '' : null;
@@ -224,7 +228,9 @@ export function parseCsvText(text: string, opts: { delimiter?: string } = {}): R
     delimitersToGuess: [',', ';', '\t', '|'],
     skipEmptyLines: false,
   });
-  const rows = parsed.data.filter((r) => Array.isArray(r)) as string[][];
+  // Quita el apóstrofo que pone csvSafeText al exportar (cabeceras incluidas: el CSV modelo y los exportados
+  // llevan los nombres de campo protegidos y deben volver a reconocerse).
+  const rows = (parsed.data.filter((r) => Array.isArray(r)) as string[][]).map((r) => r.map(csvUnsafeText));
   // papaparse deja una fila [''] por el salto de línea final.
   const table = tableFromRows(rows, { source: 'csv' });
   return { ...table, delimiter: parsed.meta.delimiter };
@@ -627,6 +633,7 @@ const ERROR_ISSUES = new Set<ImportIssue>([
   'unknown_account',
   'account_archived',
   'description_required',
+  'text_too_long',
   'empty',
   'not_a_number',
   'too_many_decimals',
@@ -752,6 +759,7 @@ export function createImportCsvService(deps: CoreDeps): ImportCsvService {
           : cellToText(at(row, mapping.description.column)).replace(/\s+/g, ' ').trim();
       if (description === '') issues.add('description_required');
       const notes = mapping.notes ? cellToText(at(row, mapping.notes.column)).trim() : '';
+      if (charLength(description) > MAX_DESCRIPTION_LENGTH || charLength(notes) > MAX_NOTES_LENGTH) issues.add('text_too_long');
 
       const values: FieldValues = {};
       for (const [fieldId, { column }] of Object.entries(mapping.fields)) {
@@ -1123,7 +1131,8 @@ export function createImportCsvService(deps: CoreDeps): ImportCsvService {
     commit,
     async templateCsv(workspaceId) {
       const headers = await templateHeaders(workspaceId);
-      return `﻿${Papa.unparse([headers], { delimiter: ',', newline: '\r\n' })}\r\n`;
+      // Los nombres de campo van protegidos contra fórmulas (=, +, -, @); parseCsvText los devuelve tal cual.
+      return `﻿${Papa.unparse([headers.map(csvSafeText)], { delimiter: ',', newline: '\r\n' })}\r\n`;
     },
     async templateTable(workspaceId) {
       return { headers: await templateHeaders(workspaceId), rows: [] };

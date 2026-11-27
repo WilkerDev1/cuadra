@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { useReturnToWorkspace } from '../../../app/data/hooks';
 import { useT } from '../../../i18n';
 import { Banner, Button, cx } from '../../../ui';
 import '../backup.css';
@@ -13,16 +14,17 @@ export interface PageProps {
   className?: string;
 }
 
-/** Marco de las pantallas de la feature: título H1 y, fuera de un espacio, vínculo de regreso a «Espacios». */
+/** Marco de las pantallas de la feature: título H1 y, fuera de un espacio, vínculo de regreso al último espacio. */
 export function Page({ title, embedded = false, children, className }: PageProps) {
   const t = useT();
+  const back = useReturnToWorkspace();
   return (
     <div className={cx('bk-page', embedded && 'bk-page--embedded', className)}>
       <header className="bk-head">
         {embedded ? null : (
-          <Link to="/" className="bk-back">
+          <Link to={back.to} className="bk-back">
             <ArrowLeft aria-hidden="true" />
-            {t('backup.back')}
+            {back.name ?? t('backup.back')}
           </Link>
         )}
         <h1 className="bk-title">{title}</h1>

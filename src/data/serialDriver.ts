@@ -1,7 +1,7 @@
 // SqlDriver común a todos los adaptadores: mutex, transacciones BEGIN IMMEDIATE/COMMIT/ROLLBACK,
 // normalización de errores y cierre. Cada adaptador solo aporta un SqlBackend que ejecuta SQL
 // sobre su única conexión (node:sqlite, worker WASM, invoke de Tauri).
-import type { Row, SqlDriver, SqlDriverInfo, SqlExecutor, SqlParams } from '../core/ports';
+import type { Row, SqlDriver, SqlDriverInfo, SqlExecutor, SqlParams, SqlStep } from '../core/ports';
 import { DataError, type DataErrorCode, normalizeSqlError } from './errors';
 import { Mutex } from './mutex';
 
@@ -13,6 +13,8 @@ export interface SqlBackend {
   run(sql: string, params?: SqlParams): Promise<{ changes: number }>;
   /** Atómico: o se aplican todas las filas o ninguna (el backend usa un SAVEPOINT). */
   runMany(sql: string, rows: readonly SqlParams[]): Promise<{ changes: number }>;
+  /** Opcional. Atómico como runMany: sentencias distintas en orden, en una sola ida. */
+  runSeries?(steps: readonly SqlStep[]): Promise<{ changes: number[] }>;
   exec(sql: string): Promise<void>;
   exportBytes(): Promise<Uint8Array>;
   close(): Promise<void>;
@@ -68,6 +70,9 @@ export function createSerialDriver(backend: SqlBackend, hooks: SerialDriverHooks
       serial(() => backend.get(sql, params) as Promise<T | undefined>, false),
     run: (sql, params) => serial(() => backend.run(sql, params), true),
     runMany: (sql, rows) => serial(() => backend.runMany(sql, rows), true),
+    ...(backend.runSeries
+      ? { runSeries: (steps: readonly SqlStep[]) => serial(() => backend.runSeries!(steps), true) }
+      : {}),
     exec: (sql) => serial(() => backend.exec(sql), true),
     exportBytes: () => serial(() => backend.exportBytes(), false),
 
@@ -87,6 +92,9 @@ export function createSerialDriver(backend: SqlBackend, hooks: SerialDriverHooks
             inTx(() => backend.get(sql, params) as Promise<R | undefined>),
           run: (sql, params) => inTx(() => backend.run(sql, params)),
           runMany: (sql, rows) => inTx(() => backend.runMany(sql, rows)),
+          ...(backend.runSeries
+            ? { runSeries: (steps: readonly SqlStep[]) => inTx(() => backend.runSeries!(steps)) }
+            : {}),
         };
         try {
           const result = await fn(tx);

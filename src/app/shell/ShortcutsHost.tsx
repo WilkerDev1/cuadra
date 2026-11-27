@@ -14,12 +14,14 @@ export function ShortcutsHost() {
   const quickActions = useQuickActions();
   const wsNav = useNav('workspace');
   const rootNav = useNav('root');
+  const singleKey = useUiStore((s) => s.singleKeyShortcuts);
   const state = useRef<ShortcutState>(INITIAL_SHORTCUT_STATE);
 
   useEffect(() => {
     const ctx = {
       quickActions: wsId === undefined ? [] : quickActions,
       goEntries: [...(wsId === undefined ? [] : wsNav), ...rootNav].filter((n) => n.goKey !== undefined),
+      singleKey,
     };
     const onKeyDown = (event: KeyboardEvent) => {
       // Con la pantalla de bloqueo puesta no se atiende nada: la app de detrás sigue montada pero oculta.
@@ -51,6 +53,6 @@ export function ShortcutsHost() {
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [wsId, go, openOverlay, quickActions, wsNav, rootNav]);
+  }, [wsId, go, openOverlay, quickActions, wsNav, rootNav, singleKey]);
   return null;
 }

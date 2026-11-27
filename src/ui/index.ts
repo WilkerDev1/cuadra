@@ -3,7 +3,7 @@
 import './styles.css';
 
 // Utilidades
-export { cx, supports, vibrate, closeTopLayer } from './lib';
+export { cx, cssColor, tintOf, supports, vibrate, closeTopLayer } from './lib';
 
 // Primitivas
 export { Button, IconButton, Spinner } from './primitives/Button';
@@ -45,7 +45,7 @@ export type { AmountParts, AmountPartsOptions, AmountNotation, KeypadKey, EvalRe
 export { numberToSpanishWords, spokenMoney } from './domain/spoken';
 
 // Gráficas
-export { Bars, Ladder, Ladder as Escalera, Donut, Line, Sparkline } from './charts/Charts';
-export type { BarsProps, BarDatum, LadderProps, DonutProps, DonutDatum, LineProps, LinePoint, SparklineProps } from './charts/Charts';
+export { Bars, Ladder, Ladder as Escalera, Line, Sparkline } from './charts/Charts';
+export type { BarsProps, BarDatum, LadderProps, LineProps, LinePoint, SparklineProps } from './charts/Charts';
 export { ladderSeries, niceCeil } from './charts/chartMath';
 export type { DayFlow, LadderDay } from './charts/chartMath';

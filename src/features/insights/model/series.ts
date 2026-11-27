@@ -175,6 +175,39 @@ export function tableRows(points: readonly Point[]): TableRow[] {
   return rows;
 }
 
+/** Tope de filas que la tabla pinta de una vez; más allá, «Mostrar más» (un resumen por día de todo el historial
+ *  son más de mil grupos y decenas de miles de nodos). */
+export const TABLE_ROW_BUDGET = 240;
+
+export interface TableWindow {
+  rows: TableRow[];
+  /** Grupos (de primer nivel) que quedan fuera. */
+  hiddenGroups: number;
+  totalGroups: number;
+}
+
+/**
+ * Ventana de filas: grupos enteros (con sus subgrupos) hasta `budget` filas; siempre al menos un grupo. En el tiempo
+ * (`fromEnd`) se toman los más recientes —el final— y se conserva el orden cronológico; en dimensiones, los primeros.
+ */
+export function tableWindow(rows: readonly TableRow[], budget: number, fromEnd: boolean): TableWindow {
+  const blocks: TableRow[][] = [];
+  for (const r of rows) {
+    if (r.depth === 0 || blocks.length === 0) blocks.push([r]);
+    else blocks[blocks.length - 1]?.push(r);
+  }
+  const order = fromEnd ? [...blocks].reverse() : blocks;
+  const taken: TableRow[][] = [];
+  let n = 0;
+  for (const b of order) {
+    if (taken.length > 0 && n + b.length > budget) break;
+    taken.push(b);
+    n += b.length;
+  }
+  if (fromEnd) taken.reverse();
+  return { rows: taken.flat(), hiddenGroups: blocks.length - taken.length, totalGroups: blocks.length };
+}
+
 // ── Enlace a Movimientos ─────────────────────────────────────────────────────────────
 
 function fieldTypeOf(g: GroupBy, fields: readonly Field[]) {

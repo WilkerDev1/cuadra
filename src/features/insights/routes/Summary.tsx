@@ -1,8 +1,8 @@
 // P-10 Resumen configurable (DESIGN 10.11, ARCHITECTURE 5.3 `/e/:wsId/resumen?vista=:viewId`).
 // El estado vive en la query string; una vista guardada es la base y la URL lleva lo que cambia encima.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { Bookmark, Copy, Download, Pencil, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Bookmark, ChevronDown, Copy, Download, Pencil, Save, Settings2, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { previousRange, resolvePeriod, systemClock } from '../../../core';
 import type { Field, GroupBy, SavedView, SummaryResult } from '../../../core';
 import { useCuadra } from '../../../app/data/CuadraProvider';
@@ -10,6 +10,7 @@ import { errorMessage } from '../../../app/data/errorMessage';
 import { useAccounts, useFieldDimensions, useMoneyFormat, useSummary, useViews, useWorkspace, useWorkspaceId } from '../../../app/data/hooks';
 import { queryDefs } from '../../../app/data/queryDefs';
 import { useCuadraQuery } from '../../../app/data/useCuadraQuery';
+import { useBreakpoint } from '../../../app/state/breakpoint';
 import { useUiStore } from '../../../app/state/uiStore';
 import { useT } from '../../../i18n';
 import { formatDate, getLocale } from '../../../i18n/format';
@@ -70,6 +71,7 @@ import {
   type SummaryState,
 } from '../model/state';
 import '../insights.css';
+import { saveFile } from '../../../app/data/download';
 
 type Dimension = Field & { groupable: boolean; filterable: boolean };
 type NameDialog = { mode: 'save' | 'rename'; name: string; error: string | null } | null;
@@ -87,6 +89,10 @@ export function Component() {
   const currency = workspace.data?.currency ?? DEFAULT_CURRENCY;
   const money = useMoneyFormat();
   const today = systemClock.today();
+  // En compacto (DESIGN 10.11) arriba solo van el periodo, Filtros y [Editar resumen]; la tabla se pliega.
+  const compact = useBreakpoint() === 'compact';
+  const [editOpen, setEditOpen] = useState(false);
+  const [tableOpen, setTableOpen] = useState(false);
 
   // ── Estado: vista guardada (base) + lo que trae la URL ─────────────────────────────
   const { viewId, patch } = useMemo(() => parseParams(sp), [sp]);
@@ -98,9 +104,20 @@ export function Component() {
   const dirty = view !== null && !sameState(state, base);
   const fieldMissing = missingFields.length > 0 || (view?.warnings ?? []).some((w) => w.code === 'field_missing');
 
+  // Funcional: dos cambios seguidos (Agrupar por y luego Medida antes de que la URL vuelva a pintar) se suman en vez
+  // de que el segundo, con el estado de su render, deshaga el primero.
+  // `latest` guarda la última URL pedida hasta que el router la pinte.
+  const seen = useRef(sp);
+  const latest = useRef(sp);
+  if (seen.current !== sp) {
+    seen.current = sp;
+    latest.current = sp;
+  }
   const update = (next: Partial<SummaryState>) => {
-    const s = normalizeState({ ...state, ...next }, dims.data).state;
-    setSp(toParams(s, view?.id ?? null), { replace: true });
+    const current = normalizeState(mergeState(base, parseParams(latest.current).patch), dims.data).state;
+    const params = toParams(normalizeState({ ...current, ...next }, dims.data).state, view?.id ?? null);
+    latest.current = params;
+    setSp(params, { replace: true });
   };
   const openView = (id: string | null) => {
     if (id === null) return `?${toParams(DEFAULT_STATE, null).toString()}`;
@@ -293,13 +310,9 @@ export function Component() {
       ...(prevGroups === null ? {} : { compare: { header: `${t('insights.table.previous')} (${measureLabel(state.measure)})`, points, money: state.measure !== 'count' } }),
     });
     const blob = new Blob(['﻿', sheetToCsv(sheet)], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = csvFileName(title, today);
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast('insights.export.done');
+    void saveFile(blob, csvFileName(title, today)).then((outcome) => {
+      if (outcome === 'saved') toast('insights.export.done');
+    });
   };
 
   const menuItems: MenuItem[] = [
@@ -330,6 +343,21 @@ export function Component() {
   };
 
   const chartOptions = CHARTS.map((c: ChartKind) => ({ value: c, label: t(`insights.chart.${c}`), disabled: !chartAllowed(c, state.groupBy) }));
+
+  const table = (
+    <SummaryTable
+      // Otra consulta, otra ventana: «Mostrar más» vuelve al tope.
+      key={toParams(state, null).toString()}
+      points={points}
+      measure={state.measure}
+      compare={prevGroups !== null}
+      currency={currency}
+      groupHeader={state.split === null ? groupLabel(state.groupBy) : `${groupLabel(state.groupBy)} · ${groupLabel(state.split)}`}
+      time={time}
+      hrefFor={rowHref}
+      diffText={(v) => money(v, { sign: 'always' })}
+    />
+  );
 
   let body;
   if (summary.isError) {
@@ -400,19 +428,66 @@ export function Component() {
           />
         </Card>
         <Card as="section" className="ins-card ins-card--table" aria-label={t('insights.table.caption')}>
-          <SummaryTable
-            points={points}
-            measure={state.measure}
-            compare={prevGroups !== null}
-            currency={currency}
-            groupHeader={state.split === null ? groupLabel(state.groupBy) : `${groupLabel(state.groupBy)} · ${groupLabel(state.split)}`}
-            hrefFor={rowHref}
-            diffText={(v) => money(v, { sign: 'always' })}
-          />
+          {compact ? (
+            <details className="ins-tabledetails" open={tableOpen} onToggle={(e) => setTableOpen(e.currentTarget.open)}>
+              <summary className="ins-tabledetails__summary">
+                {t('insights.table.show')}
+                <ChevronDown aria-hidden="true" className="ins-tabledetails__icon" />
+              </summary>
+              {tableOpen ? table : null}
+            </details>
+          ) : (
+            table
+          )}
         </Card>
       </>
     );
   }
+  // ── Controles de forma (agrupar, luego, medida, comparar): en línea en ancho, en la hoja «Editar resumen» en compacto.
+  const compareChip = (
+    <Chip
+      selected={state.compare}
+      disabled={!canCompare}
+      aria-describedby={canCompare ? undefined : 'ins-compare-why'}
+      onClick={() => update({ compare: !state.compare })}
+    >
+      {t('insights.compare.label')}
+    </Chip>
+  );
+  const compareWhy = canCompare ? null : (
+    <span id="ins-compare-why" className="ins-meta">
+      {t('insights.compare.disabled')}
+    </span>
+  );
+  const shapeControls = (
+    <div className="ins-controls__grid">
+      <FormField label={t('insights.group.label')}>
+        <Select
+          options={groupOptions}
+          value={groupParam(state.groupBy)}
+          onChange={(v) => {
+            const g = parseGroupParam(v);
+            if (g !== null) update({ groupBy: g, chart: chartAllowed(state.chart, g) ? state.chart : isTime(g) ? 'bars' : 'ranked' });
+          }}
+        />
+      </FormField>
+      <FormField label={t('insights.split.label')}>
+        <Select options={splitOptions} value={state.split === null ? '' : groupParam(state.split)} onChange={(v) => update({ split: parseGroupParam(v) })} />
+      </FormField>
+      <div className="ins-ctl">
+        <span className="ins-ctl__label" aria-hidden="true">
+          {t('insights.measure.label')}
+        </span>
+        <Segmented
+          label={t('insights.measure.label')}
+          options={MEASURES.map((m) => ({ value: m, label: measureLabel(m) }))}
+          value={state.measure}
+          onChange={(m) => update({ measure: m })}
+          fullWidth
+        />
+      </div>
+    </div>
+  );
 
   return (
     <div className="ins">
@@ -425,7 +500,7 @@ export function Component() {
           <Button variant="secondary" icon={Bookmark} className="ins-views-btn" onClick={() => setViewsOpen(true)}>
             {t('insights.views.title')}
           </Button>
-          <Button variant="secondary" icon={Download} className="ins-csv-btn" aria-label={t('insights.export.label')} disabled={result === undefined || empty} disabledReason={t('insights.empty.period')} onClick={exportCsv}>
+          <Button variant="secondary" icon={Download} className="ins-csv-btn" aria-label={t('insights.export.label')} disabled={result === undefined || empty} {...(empty ? { disabledReason: t('insights.empty.period') } : {})} onClick={exportCsv}>
             {t('insights.export.csv')}
           </Button>
           <Menu label={t('insights.views.actions')} items={menuItems} {...(view === null ? { className: 'ins-menu--compact' } : {})} />
@@ -462,50 +537,19 @@ export function Component() {
           <section className="ins-controls" aria-label={t('insights.title')}>
             <div className="ins-controls__row">
               <PeriodPicker value={state.period} onChange={(period) => update({ period })} today={today} presets={SUMMARY_PRESETS} />
-              <Chip
-                selected={state.compare}
-                disabled={!canCompare}
-                aria-describedby={canCompare ? undefined : 'ins-compare-why'}
-                onClick={() => update({ compare: !state.compare })}
-              >
-                {t('insights.compare.label')}
-              </Chip>
+              {compact ? null : compareChip}
               <Chip icon={SlidersHorizontal} aria-haspopup="dialog" onClick={() => setFiltersOpen(true)}>
                 {active.length > 0 ? `${t('insights.filters.edit')} · ${active.length}` : t('insights.filters.edit')}
               </Chip>
-              {canCompare ? null : (
-                <span id="ins-compare-why" className="ins-meta">
-                  {t('insights.compare.disabled')}
-                </span>
+              {compact ? (
+                <Chip icon={Settings2} aria-haspopup="dialog" onClick={() => setEditOpen(true)}>
+                  {t('insights.edit.label')}
+                </Chip>
+              ) : (
+                compareWhy
               )}
             </div>
-            <div className="ins-controls__grid">
-              <FormField label={t('insights.group.label')}>
-                <Select
-                  options={groupOptions}
-                  value={groupParam(state.groupBy)}
-                  onChange={(v) => {
-                    const g = parseGroupParam(v);
-                    if (g !== null) update({ groupBy: g, chart: chartAllowed(state.chart, g) ? state.chart : isTime(g) ? 'bars' : 'ranked' });
-                  }}
-                />
-              </FormField>
-              <FormField label={t('insights.split.label')}>
-                <Select options={splitOptions} value={state.split === null ? '' : groupParam(state.split)} onChange={(v) => update({ split: parseGroupParam(v) })} />
-              </FormField>
-              <div className="ins-ctl">
-                <span className="ins-ctl__label" aria-hidden="true">
-                  {t('insights.measure.label')}
-                </span>
-                <Segmented
-                  label={t('insights.measure.label')}
-                  options={MEASURES.map((m) => ({ value: m, label: measureLabel(m) }))}
-                  value={state.measure}
-                  onChange={(m) => update({ measure: m })}
-                  fullWidth
-                />
-              </div>
-            </div>
+            {compact ? null : shapeControls}
             {active.length > 0 ? (
               <div className="ins-controls__filters">
                 <FilterChips filters={active} onClear={() => setFilters({})} />
@@ -525,6 +569,29 @@ export function Component() {
       <Sheet open={viewsOpen} onClose={() => setViewsOpen(false)} title={t('insights.views.title')} height="half">
         <ViewList views={views.data ?? []} currentId={view?.id ?? null} hrefFor={openView} />
       </Sheet>
+
+      {compact ? (
+        <Sheet
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          title={t('insights.edit.label')}
+          footer={
+            <div className="ins-sheet-actions ins-sheet-actions--end">
+              <Button variant="secondary" onClick={() => setEditOpen(false)}>
+                {t('insights.edit.done')}
+              </Button>
+            </div>
+          }
+        >
+          <div className="ins-edit">
+            {shapeControls}
+            <div className="ins-controls__row">
+              {compareChip}
+              {compareWhy}
+            </div>
+          </div>
+        </Sheet>
+      ) : null}
 
       <FiltersSheet
         open={filtersOpen}

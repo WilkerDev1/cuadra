@@ -101,6 +101,8 @@ export interface AuthServiceOptions {
 
 export const AUTH_DEFAULT_AUTO_LOCK_MINUTES = 5;
 export const AUTH_MAX_AUTO_LOCK_MINUTES = 24 * 60;
+/** Opciones de bloqueo automático que ofrece la interfaz, en minutos (0 = nunca). Todas ≤ AUTH_MAX_AUTO_LOCK_MINUTES. */
+export const AUTH_AUTO_LOCK_CHOICES = Object.freeze([0, 1, 5, 15, 30] as const);
 export const AUTH_MIN_PASSWORD_LENGTH = 8;
 export const AUTH_MAX_PASSWORD_LENGTH = 1024;
 export const AUTH_MAX_PROFILE_NAME_LENGTH = 60;

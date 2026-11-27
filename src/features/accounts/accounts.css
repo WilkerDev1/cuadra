@@ -47,9 +47,6 @@
 .acc-foot > .ui-total {
   padding-inline-start: var(--gutter);
 }
-.acc-row .ui-row__more {
-  flex-shrink: 0;
-}
 .acc-neg {
   color: var(--warn-ink);
   font-weight: var(--w-medium);

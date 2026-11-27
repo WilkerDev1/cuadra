@@ -78,3 +78,20 @@ describe('createCuadra y createTestCuadra', () => {
     expect(Object.isFrozen(c.info)).toBe(true);
   });
 });
+
+describe('constantes públicas para la interfaz', () => {
+  it('autenticación, límites de texto y demo salen de la fachada', async () => {
+    const core = await import('./index');
+    expect(core.AUTH_MIN_PASSWORD_LENGTH).toBe(8);
+    expect(core.AUTH_MAX_PASSWORD_LENGTH).toBe(1024);
+    expect(core.AUTH_MAX_PROFILE_NAME_LENGTH).toBe(60);
+    expect(core.AUTH_DEFAULT_AUTO_LOCK_MINUTES).toBe(5);
+    expect([...core.AUTH_AUTO_LOCK_CHOICES]).toEqual([0, 1, 5, 15, 30]);
+    expect(core.AUTH_AUTO_LOCK_CHOICES).toContain(core.AUTH_DEFAULT_AUTO_LOCK_MINUTES);
+    for (const m of core.AUTH_AUTO_LOCK_CHOICES) expect(m).toBeLessThanOrEqual(core.AUTH_MAX_AUTO_LOCK_MINUTES);
+    expect([core.MAX_DESCRIPTION_LENGTH, core.MAX_NOTES_LENGTH, core.MAX_LABEL_LENGTH]).toEqual([200, 2_000, 80]);
+    expect(core.DEMO_PROFILES.map((p) => p.id)).toEqual(['colmado', 'despacho', 'personal']);
+    expect(core.DEMO_MONTHS).toBe(14);
+    expect(typeof core.DEMO_SEED).toBe('number');
+  });
+});

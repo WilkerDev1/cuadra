@@ -130,7 +130,7 @@ function PaletteDialog({ open }: { open: boolean }) {
         <input
           type="text"
           role="combobox"
-          aria-expanded="true"
+          aria-expanded={flat.length > 0}
           aria-controls={listId}
           aria-activedescendant={activeItem === undefined ? undefined : optionId(activeItem)}
           aria-autocomplete="list"
@@ -149,26 +149,22 @@ function PaletteDialog({ open }: { open: boolean }) {
         <kbd aria-hidden>Esc</kbd>
       </div>
       <div className="palette__results">
-        {flat.length === 0 ? (
-          <p className="palette__empty">{t('common.palette.empty', { query: query.trim() })}</p>
-        ) : grouped ? (
-          <ul id={listId} role="listbox" aria-label={t('common.palette.title')}>
-            {groupBySection(flat).map((g) => (
-              <li key={g.section} role="presentation" className="palette__group">
-                <p className="palette__heading" aria-hidden>
-                  {t(`common.palette.section.${g.section}`)}
-                </p>
-                <ul role="group" aria-label={t(`common.palette.section.${g.section}`)}>
-                  {g.items.map(renderOption)}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <ul id={listId} role="listbox" aria-label={t('common.palette.title')}>
-            {flat.map(renderOption)}
-          </ul>
-        )}
+        {flat.length === 0 ? <p className="palette__empty">{t('common.palette.empty', { query: query.trim() })}</p> : null}
+        {/* El listbox existe siempre (vacío si no hay resultados): `aria-controls` nunca apunta a nada. */}
+        <ul id={listId} role="listbox" aria-label={t('common.palette.title')} hidden={flat.length === 0}>
+          {grouped
+            ? groupBySection(flat).map((g) => (
+                <li key={g.section} role="presentation" className="palette__group">
+                  <p className="palette__heading" aria-hidden>
+                    {t(`common.palette.section.${g.section}`)}
+                  </p>
+                  <ul role="group" aria-label={t(`common.palette.section.${g.section}`)}>
+                    {g.items.map(renderOption)}
+                  </ul>
+                </li>
+              ))
+            : flat.map(renderOption)}
+        </ul>
       </div>
       <p className="visually-hidden" role="status">
         {t('common.palette.results', { n: flat.length })}

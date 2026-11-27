@@ -40,7 +40,7 @@ describe('captura en lote', () => {
       { index: 5, error: 'too_many_decimals' },
     ]);
     const batch = await t.cuadra.batches.get(result.batchId);
-    expect(batch).toMatchObject({ source: 'capture', accountId: cash, activeCount: 2, voidedCount: 0 });
+    expect(batch).toMatchObject({ source: 'capture', accountId: cash, activeCount: 2, voidedCount: 0, restorableCount: 0 });
     const rows = await t.driver.all<{ amount_minor: number; date: string; batch_id: string; kind: string }>(
       'SELECT amount_minor, date, batch_id, kind FROM transactions ORDER BY seq',
     );
@@ -124,7 +124,8 @@ describe('captura en lote', () => {
     expect(voided.value.voidedCount).toBe(2);
     expect(await countRows(t.driver, 'audit_log')).toBe(auditBefore + 1);
     expect(await balanceOf(t.driver, cash)).toBe(0);
-    expect(await t.cuadra.batches.get(result.batchId)).toMatchObject({ activeCount: 0, voidedCount: 3 });
+    // Lo anulado a mano antes NO se restaura con el lote: restorableCount solo cuenta lo que anuló el lote.
+    expect(await t.cuadra.batches.get(result.batchId)).toMatchObject({ activeCount: 0, voidedCount: 3, restorableCount: 2 });
     expect(await codeOf(t.cuadra.batches.void(result.batchId))).toBe('already_voided');
     // El historial de un movimiento muestra que lo anuló el lote.
     const [last] = await t.cuadra.transactions.history(ids[0]!);
@@ -143,6 +144,8 @@ describe('captura en lote', () => {
       { status: 'active', void_reason: null },
     ]);
     expect(await codeOf(t.cuadra.batches.restore(result.batchId))).toBe('not_voided');
+    expect(await t.cuadra.batches.get(result.batchId)).toMatchObject({ activeCount: 2, voidedCount: 1, restorableCount: 0 });
+    expect((await t.cuadra.batches.list(ws, { source: 'capture' })).find((b) => b.id === result.batchId)?.restorableCount).toBe(0);
     expect(await codeOf(t.cuadra.batches.get('no-existe'))).toBe('not_found');
   });
 

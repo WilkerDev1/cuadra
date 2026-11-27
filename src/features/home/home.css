@@ -529,7 +529,7 @@
 .home-month__icon--out { color: var(--out); }
 .home-month__cmp { font-size: var(--t-meta); color: var(--ink-3); text-wrap: pretty; }
 
-.home-strip { display: grid; gap: var(--s-3); min-inline-size: 0; }
+.home-strip { display: grid; gap: var(--s-3); min-inline-size: 0; container-type: inline-size; }
 .home-strip__track {
   display: flex;
   gap: var(--s-3);
@@ -545,7 +545,32 @@
 .home-strip__track::-webkit-scrollbar { display: none; }
 .home-strip__track > li { display: flex; scroll-snap-align: start; }
 .home-strip__spark { display: flex; margin-block-start: auto; }
-.home-strip__add {
+/* Ficha: algo más ancha si cabe; la cifra se encoge con su largo (--chars) para no tocar el borde;
+   el nombre ocupa hasta dos líneas antes de cortarse. */
+.ui-acct--card.home-strip__card {
+  inline-size: clamp(9.25rem, 25cqi, 12rem);
+  container-type: inline-size;
+}
+.home-strip__card .ui-acct__head { align-items: flex-start; }
+.home-strip__card .ui-acct__head svg { flex-shrink: 0; margin-block-start: 0.1em; }
+.home-strip__card .ui-acct__name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+/* --chars no cuenta el símbolo (en la ficha va a tamaño completo): se suman 3 («RD$», «US$»). */
+.home-strip__card .ui-amount--m {
+  max-inline-size: 100%;
+  font-size: min(var(--t-h3), calc(100cqi / ((var(--chars) + 3) * 0.58)));
+}
+.ui-acct--card.home-strip__add {
+  inline-size: auto;
+  min-inline-size: 2.75rem;
+  padding-inline: var(--s-4);
   align-items: center;
   justify-content: center;
   flex-direction: row;

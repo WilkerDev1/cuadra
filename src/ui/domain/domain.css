@@ -46,17 +46,20 @@
 .ui-amount--voided .ui-amount__figure { text-decoration: line-through 2px; text-decoration-color: var(--ink-3); }
 .ui-amount--voided .ui-amount__symbol { color: inherit; }
 
-/* Resaltador (§11.2): trazo lima DEBAJO de la cifra, nunca detrás de los dígitos. */
+/* Resaltador (§11.2): trazo lima DEBAJO de la línea base, como subrayado de rotulador.
+   La cifra fija su interlínea (--lh-tight) para que la base quede a --hl-base del borde inferior
+   (descenso de Archivo: 0.19em con interlínea 1.05); el trazo empieza --hl-drop bajo la base,
+   por debajo de la cola de la coma, y nunca toca un glifo. */
+.ui-amount--hl .ui-amount__figure { isolation: isolate; line-height: var(--lh-tight); --hl-base: 0.19em; }
 .ui-amount--hl .ui-amount__figure::after {
   content: ""; position: absolute; z-index: -1;
-  inset-inline: -0.06em; inset-block-end: calc(0.1em - var(--hl-drop));
+  inset-inline: -0.06em; inset-block-end: calc(var(--hl-base) - var(--hl-drop) - var(--hl-h));
   block-size: var(--hl-h);
   border-radius: 2px 6px 3px 5px;
   background: linear-gradient(var(--lime), var(--lime)) no-repeat left / 100% 100%;
   transform: skewX(-8deg);
   animation: ui-hl var(--d-micro) var(--ease-out) both;
 }
-.ui-amount--hl .ui-amount__figure { isolation: isolate; }
 @keyframes ui-hl { from { background-size: 0% 100%; } }
 @media (prefers-reduced-motion: reduce) { .ui-amount--hl .ui-amount__figure::after { animation: none; } }
 
@@ -175,7 +178,7 @@
   background: var(--surface); font-size: var(--t-h2); text-align: end; font-variant-numeric: var(--num);
   caret-color: var(--ink);
 }
-.ui-keypad:has(.ui-keypad__input:focus-visible:not(.is-visible)) .ui-keypad__display {
+.ui-keypad[data-kbd]:has(.ui-keypad__input:focus-visible:not(.is-visible)) .ui-keypad__display {
   outline: var(--bw-2) solid var(--focus-ring); outline-offset: 2px; box-shadow: 0 0 0 5px var(--focus-halo); border-radius: var(--r-2);
 }
 .ui-keypad__keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--key-gap); }
@@ -210,7 +213,7 @@
 }
 .ui-filters > * { scroll-snap-align: start; }
 .ui-filters__add {
-  min-block-size: var(--chip-h); padding: 0 var(--s-3); border-radius: var(--r-1);
+  position: relative; min-block-size: var(--chip-h); padding: 0 var(--s-3); border-radius: var(--r-1);
   color: var(--accent-ink); font-size: var(--t-small); font-weight: var(--w-medium); white-space: nowrap; flex-shrink: 0;
 }
 @media (hover: hover) { .ui-filters__add:hover { background: var(--surface-2); } }

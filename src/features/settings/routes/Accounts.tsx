@@ -1,4 +1,5 @@
 // ajustes/cuentas: orden y archivo de las cuentas. Crear y editar viven en la pantalla Cuentas.
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { Plus } from 'lucide-react';
 import type { AccountWithBalance } from '../../../core';
@@ -7,7 +8,7 @@ import { useT } from '../../../i18n';
 import { ACCOUNT_ICON, Banner, EmptyState, InfoTip, LedgerList, Switch } from '../../../ui';
 import { Frame } from '../components/Frame';
 import { Load } from '../components/Load';
-import { ReorderButtons, useAnnouncer } from '../components/Reorder';
+import { OrderToggle, ReorderButtons, useAnnouncer } from '../components/Reorder';
 import { fullOrder, moveId, positionOf } from '../lib/reorder';
 import { splitActive } from '../lib/fieldRules';
 import { useRun } from '../lib/useRun';
@@ -36,6 +37,7 @@ function AccountList({ accounts }: { accounts: AccountWithBalance[] }) {
   const money = useMoneyFormat();
   const { run, error } = useRun();
   const [live, announce] = useAnnouncer();
+  const [ordering, setOrdering] = useState(false);
   const { active, inactive } = splitActive(accounts.map((a) => ({ ...a, active: a.archivedAt === null })));
   const activeIds = active.map((a) => a.id);
 
@@ -72,8 +74,8 @@ function AccountList({ accounts }: { accounts: AccountWithBalance[] }) {
       <div key={account.id} role="listitem" className="set-row" data-muted={isActive ? undefined : ''}>
         <Icon aria-hidden="true" className="set-row__icon" />
         <span className="set-row__text">
-          <span className="set-row__title truncate">{account.name}</span>
-          <span className="set-row__meta truncate">
+          <span className="set-row__title">{account.name}</span>
+          <span className="set-row__meta">
             <span className="visually-hidden">{t(`accounts.type.${account.type}`)}. </span>
             <span className="num">{money(account.balanceMinor)}</span>
           </span>
@@ -92,9 +94,10 @@ function AccountList({ accounts }: { accounts: AccountWithBalance[] }) {
   };
 
   return (
-    <div className="set-stack">
+    <div className="set-stack set-orderable" data-ordering={ordering ? '' : undefined}>
       {error === null ? null : <Banner tone="warn">{error}</Banner>}
       {live}
+      {active.length > 1 ? <OrderToggle ordering={ordering} onToggle={() => setOrdering((o) => !o)} /> : null}
       <LedgerList label={t('sec.accounts')}>{active.map((a, i) => row(a, i, active.length, true))}</LedgerList>
       {inactive.length === 0 ? null : (
         <section className="set-sec" aria-labelledby="set-acc-off">

@@ -7,7 +7,7 @@ import { addDays, compareIsoDate, diffDays } from '../dates';
 import type { ChangeEvent } from '../events';
 import type { DemoProgress, DemoSeedResult } from '../services/demo';
 import type { DateRange, Id, Mutation, StatementLine } from '../types';
-import { countPlanTransactions, DEMO_PROFILES, DEMO_SEED, hashPlan, planDemo, type DemoPlan } from './index';
+import { countPlanTransactions, DEMO_PROFILES, DEMO_SEED, hashPlan, planDemo, recordedOn, type DemoPlan } from './index';
 import { percentOf, roundToUnit } from './prng';
 
 const ANCHOR = '2026-11-27';
@@ -20,7 +20,110 @@ const salesOf = (p: DemoPlan, month: string): number =>
     0,
   );
 
+/** Saldo total (todas las cuentas) al cierre de cada mes y neto del mes, según el plan (sin la historia). */
+function monthEnds(p: DemoPlan): Array<{ month: string; net: number; balance: number }> {
+  const net = new Map<string, number>();
+  const add = (d: string, v: number) => net.set(d.slice(0, 7), (net.get(d.slice(0, 7)) ?? 0) + v);
+  let opening = 0;
+  for (const o of [...Object.values(p.openings), ...p.extraAccounts.flatMap((a) => (a.opening ? [a.opening] : []))]) {
+    opening += o.direction === 'in' ? o.amountMinor : -o.amountMinor;
+  }
+  for (const it of p.items) {
+    if (it.t === 'tx') add(it.date, it.kind === 'income' ? it.amountMinor : -it.amountMinor);
+    else if (it.t === 'capture') {
+      // El lote duplicado (anulado entero en la historia) no cuenta.
+      const voided = p.steps.some((s) => s.t === 'void_batch' && s.ref === it.ref);
+      if (!voided) for (const r of it.rows) add(it.date, it.kind === 'income' ? r.amountMinor : -r.amountMinor);
+    } else if (it.t === 'import') for (const r of it.rows) add(r.date, r.kind === 'income' ? r.amountMinor : -r.amountMinor);
+  }
+  let balance = opening;
+  return [...net.keys()].sort().map((month) => {
+    balance += net.get(month) ?? 0;
+    return { month, net: net.get(month) ?? 0, balance };
+  });
+}
+
+/** Saldo de una cuenta al final del plan. */
+function finalBalance(p: DemoPlan, account: string): number {
+  const o = p.openings[account] ?? p.extraAccounts.find((a) => a.key === account)?.opening;
+  let b = o === undefined ? 0 : o.direction === 'in' ? o.amountMinor : -o.amountMinor;
+  for (const it of p.items) {
+    if (it.t === 'tx' && it.account === account) b += it.kind === 'income' ? it.amountMinor : -it.amountMinor;
+    else if (it.t === 'transfer') b += it.to === account ? it.amountMinor : it.from === account ? -it.amountMinor : 0;
+    else if (it.t === 'import' && it.account === account) for (const r of it.rows) b += r.kind === 'income' ? r.amountMinor : -r.amountMinor;
+    else if (it.t === 'capture' && it.account === account) for (const r of it.rows) b += it.kind === 'income' ? r.amountMinor : -r.amountMinor;
+  }
+  return b;
+}
+
+const RD = 100;
+
 describe('plan de datos de ejemplo (puro)', () => {
+  it('saldos creíbles: oscilan en cientos de miles, con meses de neto negativo, caída y recuperación', () => {
+    const bounds = { colmado: [80_000, 900_000], despacho: [150_000, 1_500_000], personal: [40_000, 350_000] } as const;
+    for (const profile of PROFILES) {
+      const p = planDemo(profile, { anchor: ANCHOR });
+      const ends = monthEnds(p);
+      const [lo, hi] = bounds[profile];
+      for (const e of ends) {
+        expect(e.balance, `${profile} ${e.month}`).toBeGreaterThanOrEqual(lo * RD);
+        expect(e.balance, `${profile} ${e.month}`).toBeLessThanOrEqual(hi * RD);
+      }
+      // No crece sin parar: el último cierre no llega al doble del primero.
+      expect(ends[ends.length - 1]!.balance, profile).toBeLessThan(ends[0]!.balance * 2);
+      // Al menos dos meses (completos) con neto negativo.
+      expect(ends.slice(1, -1).filter((e) => e.net < 0).length, profile).toBeGreaterThanOrEqual(2);
+      // Caída visible desde un máximo (≥ 12 %) y recuperación posterior (≥ 12 % sobre ese punto bajo).
+      const balances = ends.map((e) => e.balance);
+      const dipAndRecovery = balances.some((v, j) => {
+        const peak = Math.max(...balances.slice(0, j + 1));
+        return j > 0 && v <= peak * 0.88 && Math.max(...balances.slice(j + 1), -Infinity) >= v * 1.12;
+      });
+      expect(dipAndRecovery, `${profile} ${balances.map((v) => Math.round(v / RD / 1000)).join(' ')}`).toBe(true);
+    }
+  });
+
+  it('colmado: inventario fuerte antes de diciembre, retiros del dueño, alquiler, nómina, préstamo y depósitos', () => {
+    const p = planDemo('colmado', { anchor: ANCHOR });
+    const purchases = (month: string) =>
+      p.items.reduce((s, i) => (i.t === 'tx' && i.date.startsWith(month) && i.values['categoria'] === 'mercancia' ? s + i.amountMinor : s), 0);
+    const sales = (month: string) => salesOf(p, month);
+    // En noviembre se compra mucho más de lo que se vende en proporción; en diciembre, al revés.
+    expect(purchases('2025-11') / sales('2025-11')).toBeGreaterThan((purchases('2025-12') / sales('2025-12')) * 1.3);
+    expect(purchases('2025-11')).toBeGreaterThan(purchases('2025-10') * 1.15);
+    for (const text of ['Retiro del dueño', 'Alquiler del local', 'Nómina', 'Cuota del préstamo']) {
+      expect(p.items.filter((i) => i.t === 'tx' && i.description.startsWith(text)).length, text).toBeGreaterThanOrEqual(12);
+    }
+    expect(p.items.filter((i) => i.t === 'transfer' && i.description.startsWith('Depósito del efectivo')).length).toBeGreaterThan(80);
+    expect(finalBalance(p, 'tarjeta')).toBeLessThan(0);
+  });
+
+  it('personal: sueldo quincenal, ahorro modesto que crece y tarjeta que se paga cada mes', () => {
+    const p = planDemo('personal', { anchor: ANCHOR });
+    expect(p.items.filter((i) => i.t === 'tx' && i.description === 'Salario quincenal').length).toBeGreaterThanOrEqual(27);
+    const ahorros = finalBalance(p, 'ahorros');
+    expect(ahorros).toBeGreaterThan(p.openings['ahorros']!.amountMinor);
+    expect(ahorros).toBeLessThan(p.openings['ahorros']!.amountMinor + 150_000 * RD);
+    expect(p.items.filter((i) => i.t === 'transfer' && i.description === 'Pago de la tarjeta').length).toBeGreaterThanOrEqual(12);
+    expect(finalBalance(p, 'tarjeta')).toBeLessThan(0);
+  });
+
+  it('la historia de cada movimiento empieza después de anotarlo (bloque semanal, lote o importación)', () => {
+    for (const profile of PROFILES) {
+      const p = planDemo(profile, { anchor: ANCHOR });
+      const recorded = new Map<string, string>();
+      for (const it of p.items) if (it.ref !== undefined) recorded.set(it.ref, recordedOn(it, ANCHOR));
+      let checked = 0;
+      for (const s of p.steps) {
+        if (!('ref' in s)) continue;
+        const at = recorded.get(s.ref);
+        expect(at, `${profile} ${s.ref}`).toBeDefined();
+        expect(compareIsoDate(s.at, at!), `${profile} ${s.t} ${s.ref} el ${s.at}, anotado el ${at}`).toBeGreaterThan(0);
+        checked += 1;
+      }
+      expect(checked, profile).toBeGreaterThan(5);
+    }
+  });
   it('misma semilla y misma fecha ancla → mismo plan (hash idéntico); otra semilla u otra ancla → otro', () => {
     for (const profile of PROFILES) {
       const a = planDemo(profile, { anchor: ANCHOR });
@@ -223,6 +326,41 @@ describe('demo.seedAll', () => {
     for (const profile of PROFILES) await checkInvariants(h, ws[profile]);
   });
 
+  it('historia coherente en el tiempo: cada acción, después de anotar lo que toca, y nada después de ahora', async () => {
+    const now = h.clock.now().toISOString();
+    for (const profile of PROFILES) {
+      const id = ws[profile];
+      const txActions = await h.driver.all<{ action: string; at: string; created: string; description: string }>(
+        `SELECT a.action, a.at, MAX(t.recorded_at) AS created, MIN(t.description) AS description FROM audit_log a
+         JOIN transactions t ON (a.entity_type = 'transaction' AND t.id = a.entity_id) OR (a.entity_type = 'transfer' AND t.transfer_group_id = a.entity_id)
+         WHERE a.workspace_id = ? AND a.action IN ('edit', 'void', 'restore') GROUP BY a.id`,
+        [id],
+      );
+      expect(txActions.length, profile).toBeGreaterThan(5);
+      expect(txActions.filter((x) => x.at <= x.created), profile).toEqual([]);
+      const batchActions = await h.driver.all<{ action: string; at: string; created: string }>(
+        `SELECT a.action, a.at, b.created_at AS created FROM audit_log a JOIN batches b ON b.id = a.entity_id
+         WHERE a.workspace_id = ? AND a.action IN ('batch_void', 'batch_restore')`,
+        [id],
+      );
+      expect(batchActions.filter((x) => x.at <= x.created), profile).toEqual([]);
+      // Ningún movimiento se anotó antes de su propia fecha (salvo los saldos iniciales, del primer día).
+      const early = await h.driver.get<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM transactions WHERE workspace_id = ? AND substr(recorded_at, 1, 10) < date AND date < ?`,
+        [id, addDays(ANCHOR, -1)],
+      );
+      expect(Number(early?.n), profile).toBe(0);
+      const latest = await h.driver.get<{ a: string; c: string; u: string; b: string }>(
+        `SELECT (SELECT MAX(at) FROM audit_log WHERE workspace_id = ?1) AS a,
+                (SELECT MAX(recorded_at) FROM transactions WHERE workspace_id = ?1) AS c,
+                (SELECT MAX(updated_at) FROM transactions WHERE workspace_id = ?1) AS u,
+                (SELECT MAX(created_at) FROM batches WHERE workspace_id = ?1) AS b`,
+        [id],
+      );
+      for (const [k, v] of Object.entries(latest ?? {})) expect(v <= now, `${profile} ${k} ${v} > ${now}`).toBe(true);
+    }
+  });
+
   it('identidad de saldos de los informes sobre los datos generados (varios periodos y cada cuenta)', async () => {
     for (const profile of PROFILES) {
       const id = ws[profile];
@@ -406,7 +544,7 @@ describe('demo.seedAll', () => {
       const candidates = await h.driver.all<{ a: string; b: string }>(
         `SELECT x.id AS a, y.id AS b FROM transactions x JOIN transactions y
            ON y.account_id = x.account_id AND y.direction = x.direction AND y.amount_minor = x.amount_minor
-          AND y.description = x.description AND y.id > x.id AND abs(julianday(y.date) - julianday(x.date)) <= 1
+          AND y.description = x.description AND y.id > x.id AND y.date BETWEEN date(x.date, '-1 day') AND date(x.date, '+1 day')
          WHERE x.workspace_id = ? AND x.status = 'active' AND y.status = 'active' AND x.kind IN ('income', 'expense')`,
         [ws[profile]],
       );

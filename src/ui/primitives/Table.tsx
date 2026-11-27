@@ -31,6 +31,7 @@ export interface TableProps<R> {
   rowKey: (row: R) => string;
   /** Fila seleccionada (fondo --surface-2 y borde izquierdo de tinta). */
   selectedKey?: string | null;
+  /** Activa la fila con clic, Enter o Espacio (la fila es enfocable). */
   onRowClick?: (row: R) => void;
   /** Filas anuladas: tachadas y sin sumar. */
   isVoided?: (row: R) => boolean;
@@ -39,14 +40,16 @@ export interface TableProps<R> {
   /** Densidad compacta (`--fila-densa`). */
   dense?: boolean;
   empty?: ReactNode;
+  /** `false`: la tabla no impone `overflow` ni foco al contenedor; el padre decide el desplazamiento. Por defecto `true`. */
+  scroll?: boolean;
   className?: string;
 }
 
 /** Tabla densa con cabecera sticky; bajo 640px de contenedor se apila con etiquetas de `data-label`. */
-export function Table<R>({ variant = 'ledger', caption, hideCaption = true, columns, rows, rowKey, selectedKey, onRowClick, isVoided, footer, dense, empty, className }: TableProps<R>) {
+export function Table<R>({ variant = 'ledger', caption, hideCaption = true, columns, rows, rowKey, selectedKey, onRowClick, isVoided, footer, dense, empty, scroll = true, className }: TableProps<R>) {
   const captionId = useId();
   return (
-    <div className={cx('ui-table-wrap', className)} role="region" aria-labelledby={captionId} tabIndex={0}>
+    <div className={cx('ui-table-wrap', scroll === false && 'ui-table-wrap--static', className)} {...(scroll ? { role: 'region', 'aria-labelledby': captionId, tabIndex: 0 } : {})}>
       <table className={cx('ui-table', `ui-table--${variant}`, dense === true && 'ui-table--dense')}>
         <caption id={captionId} className={hideCaption ? 'visually-hidden' : 'ui-table__caption'}>
           {caption}
@@ -74,7 +77,19 @@ export function Table<R>({ variant = 'ledger', caption, hideCaption = true, colu
                 aria-selected={selectedKey === undefined ? undefined : selectedKey === key}
                 data-voided={isVoided?.(row) === true || undefined}
                 className={cx(onRowClick !== undefined && 'is-clickable')}
+                tabIndex={onRowClick === undefined ? undefined : 0}
                 onClick={onRowClick === undefined ? undefined : () => onRowClick(row)}
+                onKeyDown={
+                  onRowClick === undefined
+                    ? undefined
+                    : (e) => {
+                        // Solo si la tecla llega a la fila misma: los botones y campos de las celdas conservan la suya.
+                        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          onRowClick(row);
+                        }
+                      }
+                }
               >
                 {columns.map((c) => (
                   <td

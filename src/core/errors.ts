@@ -64,6 +64,7 @@ export const ERROR_CODES = [
   'profile_name_required',
   'invalid_auto_lock',
   'crypto_unavailable', // sin crypto.subtle (contexto no seguro: http://ip-de-la-red)
+  'text_too_long', // descripción, notas o etiqueta pasan del máximo: details.reason ('description' | 'notes' | 'label') y details.max
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

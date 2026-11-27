@@ -1,4 +1,5 @@
 // Descarga de un CSV desde el navegador, y nombre de archivo sin caracteres problemáticos.
+import { saveTextFile } from '../../app/data/download';
 
 /** «Historial-Colmado-La-Esquina-2026-11-27.csv» */
 export function fileName(...parts: readonly string[]): string {
@@ -15,13 +16,5 @@ export function fileName(...parts: readonly string[]): string {
 }
 
 export function downloadCsv(content: string, filename: string): void {
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.rel = 'noopener';
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  void saveTextFile(content, filename, 'text/csv;charset=utf-8');
 }

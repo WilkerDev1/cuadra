@@ -157,6 +157,18 @@ export const DEMO_MONTHS = 14;
 /** Fecha en que acaba un elemento (los import se ordenan por su fecha de importación). */
 const itemDate = (it: DemoItem): IsoDate => it.date;
 
+/**
+ * Día en que el elemento queda ANOTADO en la base (su created_at): los movimientos sueltos se anotan por
+ * bloques semanales (lunes a domingo) el domingo, o el día ancla si la semana no ha terminado; los lotes de
+ * captura, el mismo día; los importados, el día de la importación. La historia de un movimiento (ediciones,
+ * anulaciones) siempre cae DESPUÉS de este día.
+ */
+export function recordedOn(it: DemoItem, anchor: IsoDate): IsoDate {
+  if (it.t === 'capture' || it.t === 'import') return it.date;
+  const sunday = addDays(it.date, (7 - weekday(it.date)) % 7);
+  return compareIsoDate(sunday, anchor) > 0 ? anchor : sunday;
+}
+
 export function sortPlan(plan: DemoPlan): DemoPlan {
   const items = plan.items.map((it, i) => ({ it, i }));
   items.sort((a, b) => compareIsoDate(itemDate(a.it), itemDate(b.it)) || a.i - b.i);

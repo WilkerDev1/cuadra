@@ -1,6 +1,6 @@
 // Captura (DESIGN §10.6–10.9): Nuevo movimiento y editar, Transferencia, Captura en tabla y Ráfaga.
 // Liviano: solo descriptores; las pantallas se cargan con `lazy`.
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Rows3, Zap } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, TableProperties, Zap } from 'lucide-react';
 import type { FeatureModule } from '../../app/registry/types';
 
 export const feature: FeatureModule = {
@@ -11,7 +11,7 @@ export const feature: FeatureModule = {
     { path: 'captura', scope: 'workspace', titleKey: 'capture.table.title', lazy: () => import('./routes/TableCapture') },
   ],
   nav: [
-    { id: 'capture', scope: 'workspace', to: 'captura', labelKey: 'capture.nav', icon: Rows3, placement: 'more', group: 'book', order: 38 },
+    { id: 'capture', scope: 'workspace', to: 'captura', labelKey: 'capture.nav', icon: TableProperties, placement: 'more', group: 'book', order: 38 },
   ],
   quickActions: [
     { id: 'in', labelKey: 'capture.quick.in', icon: ArrowDownLeft, tone: 'in', to: 'nuevo?tipo=entrada', order: 1, shortcut: 'e' },

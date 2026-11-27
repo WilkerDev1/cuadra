@@ -8,7 +8,7 @@ export default {
   'reports.list.summary': 'Resumido',
   'reports.list.summary.hint': 'Saldos por cuenta y reparto por categoría',
   'reports.list.detailed': 'Detallado',
-  'reports.list.detailed.hint': 'Lo anterior más cada movimiento con su saldo',
+  'reports.list.detailed.hint': 'Lo anterior más cada movimiento, con el saldo de su cuenta',
   'reports.list.saved': 'Guardados',
   'reports.list.savedEmpty': 'Los informes que guardes con tu configuración aparecerán aquí.',
   'reports.list.error': 'No pudimos leer los informes guardados. Tus datos siguen en el dispositivo.',

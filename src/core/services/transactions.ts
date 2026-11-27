@@ -10,7 +10,7 @@
 // del esquema llegue como SqlError.
 import { DomainError } from '../errors';
 import { Money } from '../money';
-import type { SqlExecutor } from '../ports';
+import { runSeries, type SqlExecutor, type SqlStep } from '../ports';
 import {
   fieldValueToRecord,
   groupFieldValues,
@@ -285,30 +285,52 @@ async function assertItems(tx: SqlExecutor, ctx: WorkspaceContext, items: readon
 }
 
 /**
- * Inserta las filas: reserva cada seq con UPDATE … RETURNING justo antes de su INSERT (el trigger
- * tx_seq_reserved exige seq = next_seq − 1) y los valores de campos en un solo runMany.
- * Devuelve los registros tal como quedaron.
+ * Inserta las filas. El trigger tx_seq_reserved exige que cada INSERT lleve seq = next_seq − 1 de su cuenta,
+ * así que cada fila sigue siendo «reservar (UPDATE next_seq + 1) y luego insertar», en ese orden. Pero los
+ * seq se conocen de antemano (una lectura de next_seq por cuenta, dentro de la misma transacción de
+ * escritura) y todos los pares van en UNA ida al worker con runSeries; los valores de campos en un runMany.
+ * Si algo no cuadra, el trigger aborta y la transacción entera se deshace. Devuelve los registros.
  */
 async function insertRows(
   uow: Pick<UowCtx, 'tx' | 'clock' | 'touch'>,
-  workspaceId: Id,
+  workspace: WorkspaceContext,
   rows: readonly PendingRow[],
   batchId: Id | null,
+  /** Sentencias que deben ir antes en el mismo viaje (el INSERT del lote, al que apuntan las filas). */
+  before: readonly SqlStep[] = [],
 ): Promise<TransactionRecord[]> {
+  const workspaceId = workspace.workspace.id;
   const now = uow.clock.now().toISOString();
+  // next_seq sale del contexto, leído en esta misma transacción de escritura justo antes (nada lo cambió
+  // desde entonces); si una cuenta no está, se lee. Un valor desfasado no pasaría: el trigger abortaría.
+  const nextSeq = new Map<Id, number>();
+  const missing: Id[] = [];
+  for (const id of new Set(rows.map((r) => r.accountId))) {
+    const known = workspace.accounts.get(id);
+    if (known === undefined) missing.push(id);
+    else nextSeq.set(id, Number(known.next_seq));
+  }
+  if (missing.length > 0) {
+    const current = await uow.tx.all<{ id: string; next_seq: number }>(
+      `SELECT id, next_seq FROM accounts WHERE id IN (${missing.map(() => '?').join(', ')})`,
+      missing,
+    );
+    for (const a of current) nextSeq.set(a.id, Number(a.next_seq));
+  }
   const records: TransactionRecord[] = [];
   const values: FieldValueRecord[] = [];
+  const steps: SqlStep[] = [...before];
+  const reserve = 'UPDATE accounts SET next_seq = next_seq + 1 WHERE id = ?';
+  const insert = insertSql('transactions');
   for (const row of rows) {
-    const reserved = await uow.tx.get<{ seq: number }>(
-      'UPDATE accounts SET next_seq = next_seq + 1 WHERE id = ? RETURNING next_seq - 1 AS seq',
-      [row.accountId],
-    );
-    if (!reserved) throw new DomainError('not_found', { entity: 'account', id: row.accountId });
+    const seq = nextSeq.get(row.accountId);
+    if (seq === undefined) throw new DomainError('not_found', { entity: 'account', id: row.accountId });
+    nextSeq.set(row.accountId, seq + 1);
     const record: TransactionRecord = {
       id: row.id,
       workspace_id: workspaceId,
       account_id: row.accountId,
-      seq: Number(reserved.seq),
+      seq,
       kind: row.kind,
       direction: row.direction,
       amount_minor: row.amountMinor,
@@ -325,9 +347,19 @@ async function insertRows(
       recorded_at: now,
       updated_at: now,
     };
-    await uow.tx.run(insertSql('transactions'), recordValues('transactions', record));
+    steps.push({ sql: reserve, params: [row.accountId] }, { sql: insert, params: recordValues('transactions', record) });
     records.push(record);
     for (const [fieldId, v] of Object.entries(row.values)) values.push(fieldValueToRecord(row.id, fieldId, v));
+  }
+  const { changes } = await runSeries(uow.tx, steps);
+  // Cada reserva debe tocar exactamente su cuenta (si no, el trigger ya habría abortado el INSERT). Y el
+  // contexto queda al día por si quien llama vuelve a insertar en la misma transacción.
+  if (changes.some((n, i) => i >= before.length && (i - before.length) % 2 === 0 && n !== 1)) {
+    throw new DomainError('not_found', { entity: 'account' });
+  }
+  for (const [id, seq] of nextSeq) {
+    const known = workspace.accounts.get(id);
+    if (known !== undefined) workspace.accounts.set(id, { ...known, next_seq: seq });
   }
   if (values.length > 0) {
     await uow.tx.runMany(
@@ -418,9 +450,9 @@ export async function insertBatch(
   }
 
   const batchId = ctx.ids.next();
-  await ctx.tx.run(
-    insertSql('batches'),
-    recordValues('batches', {
+  const batchStep: SqlStep = {
+    sql: insertSql('batches'),
+    params: recordValues('batches', {
       id: batchId,
       workspace_id: input.workspaceId,
       account_id: input.batch.accountId,
@@ -431,19 +463,20 @@ export async function insertBatch(
       meta: input.batch.meta === undefined ? null : toJson(input.batch.meta),
       created_at: ctx.clock.now().toISOString(),
     }),
-  );
+  };
   ctx.touch('batches');
 
   const rows = items.flatMap((it) => it.rows);
-  const records = await insertRows(ctx, input.workspaceId, rows, batchId);
+  // El lote y sus filas en un solo viaje (el lote primero: las filas lo referencian).
+  const records = await insertRows(ctx, ws, rows, batchId, [batchStep]);
 
-  // Saldo final negativo por cuenta (una consulta).
+  // Saldo final negativo por cuenta (una consulta, y solo si alguna cuenta baja: las que suben no avisan).
   const deltas = new Map<Id, Minor>();
   for (const r of rows) {
     if (r.status !== 'active') continue;
     deltas.set(r.accountId, Money.add(deltas.get(r.accountId) ?? 0, Money.signed(r.amountMinor, r.direction)));
   }
-  const accountIds = [...deltas.keys()];
+  const accountIds = [...deltas.keys()].filter((id) => (deltas.get(id) ?? 0) < 0);
   if (accountIds.length > 0) {
     const balances = await ctx.tx.all<{ account_id: string; b: number }>(
       `SELECT account_id, SUM(CASE direction WHEN 'in' THEN amount_minor ELSE -amount_minor END) AS b
@@ -547,7 +580,7 @@ export function createTransactionsService(deps: CoreDeps): TransactionsService {
       await assertItems(ctx.tx, ws, [item]);
       const [warnings = []] = await computeWarnings(ctx.tx, [{ legs: item.rows }], { today: ctx.clock.today() });
       for (const w of warnings) ctx.warn(w);
-      const records = await insertRows(ctx, workspaceId, item.rows, null);
+      const records = await insertRows(ctx, ws, item.rows, null);
       const created = toTransactions(records, item.rows);
       const first = created[0]!;
       const loaded: Loaded = { record: records[0]!, tx: first, other: created[1] ? { record: records[1]!, tx: created[1] } : null };

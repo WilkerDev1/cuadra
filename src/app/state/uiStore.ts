@@ -27,6 +27,9 @@ export interface UiState {
   /** Hay una versión nueva del service worker lista para activarse. */
   updateReady: boolean;
   applyUpdate: (() => void) | null;
+  /** Atajos de una sola tecla (n, e, s, t, /, ?, g + letra). Se pueden apagar (WCAG 2.1.4). */
+  singleKeyShortcuts: boolean;
+  setSingleKeyShortcuts(on: boolean): void;
   setTheme(theme: ThemeChoice): void;
   setLastWorkspaceId(id: Id | null): void;
   pushToast(toast: Omit<Toast, 'id'>): number;
@@ -55,6 +58,8 @@ export const useUiStore = create<UiState>()(
       overlay: null,
       updateReady: false,
       applyUpdate: null,
+      singleKeyShortcuts: true,
+      setSingleKeyShortcuts: (singleKeyShortcuts) => set({ singleKeyShortcuts }),
       setTheme: (theme) => set({ theme }),
       setLastWorkspaceId: (lastWorkspaceId) => set({ lastWorkspaceId }),
       pushToast: (toast) => {
@@ -71,7 +76,7 @@ export const useUiStore = create<UiState>()(
     {
       name: 'cuadra.ui',
       version: 1,
-      partialize: (s) => ({ theme: s.theme, lastWorkspaceId: s.lastWorkspaceId }),
+      partialize: (s) => ({ theme: s.theme, lastWorkspaceId: s.lastWorkspaceId, singleKeyShortcuts: s.singleKeyShortcuts }),
       storage: {
         getItem: (name) => {
           try {

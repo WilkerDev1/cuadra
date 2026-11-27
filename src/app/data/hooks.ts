@@ -236,3 +236,14 @@ export function useMoneyParse(): (s: string, o?: { allowNegative?: boolean }) =>
     [currency],
   );
 }
+
+/**
+ * Vuelta desde una pantalla de la raíz (Respaldo, Plantillas, Ajustes, Seguridad) al espacio de donde se vino: el
+ * último abierto, si sigue existiendo. Sin ninguno, la lista de espacios. Para un único «← {nombre}» en todas ellas.
+ */
+export function useReturnToWorkspace(): { to: string; name: string | null } {
+  const last = useUiStore((s) => s.lastWorkspaceId);
+  const list = useWorkspaces();
+  const ws = last === null ? undefined : list.data?.find((w) => w.id === last);
+  return ws === undefined ? { to: '/', name: null } : { to: `/e/${ws.id}`, name: ws.name };
+}

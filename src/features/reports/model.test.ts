@@ -10,6 +10,9 @@ import {
   groupableFields,
   isPresetId,
   joinNames,
+  lowerFirst,
+  chunkByMonth,
+  withRunningBalances,
   presetIdOf,
   recipeForSave,
   recipeToConfig,
@@ -138,5 +141,43 @@ describe('piezas', () => {
     expect(joinNames(['Categoría'])).toBe('Categoría');
     expect(joinNames(['Categoría', 'Centro'])).toBe('Categoría y Centro');
     expect(joinNames(['A', 'B', 'C'])).toBe('A, B y C');
+  });
+});
+
+describe('lowerFirst', () => {
+  it('baja la inicial y respeta siglas', () => {
+    expect(lowerFirst('Categoría')).toBe('categoría');
+    expect(lowerFirst('CxC')).toBe('CxC');
+    expect(lowerFirst('')).toBe('');
+    expect(lowerFirst('centro de costo')).toBe('centro de costo');
+  });
+});
+
+describe('chunkByMonth', () => {
+  it('agrupa filas consecutivas por mes', () => {
+    const rows = [{ date: '2026-01-03' }, { date: '2026-01-20' }, { date: '2026-02-01' }];
+    const parts = chunkByMonth(rows);
+    expect(parts.map((p) => [p.month, p.rows.length])).toEqual([
+      ['2026-01', 2],
+      ['2026-02', 1],
+    ]);
+  });
+});
+
+describe('withRunningBalances', () => {
+  const row = (accountId: string, direction: 'in' | 'out', amountMinor: number) => ({ accountId, direction, amountMinor, runningMinor: null as number | null });
+  const lines = [
+    { account: { id: 'a' }, periodOpeningMinor: 1000, closingMinor: 1500 },
+    { account: { id: 'b' }, periodOpeningMinor: 0, closingMinor: 200 },
+  ];
+  it('calcula el saldo de cada cuenta por separado', () => {
+    const out = withRunningBalances([row('a', 'in', 700), row('b', 'in', 200), row('a', 'out', 200)], lines);
+    expect(out?.map((r) => r.runningMinor)).toEqual([1700, 200, 1500]);
+  });
+  it('no inventa saldo si no cuadra con el saldo final', () => {
+    expect(withRunningBalances([row('a', 'in', 100), row('b', 'in', 200)], lines)).toBeNull();
+  });
+  it('respeta el saldo que ya dio el núcleo', () => {
+    expect(withRunningBalances([{ ...row('a', 'in', 500), runningMinor: 1500 }], lines)).toBeNull();
   });
 });

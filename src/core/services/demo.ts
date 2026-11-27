@@ -20,6 +20,7 @@ import {
   DEMO_PROFILES,
   isDemoProfileId,
   planDemo,
+  recordedOn,
   type DemoItem,
   type DemoPlan,
   type DemoProfile,
@@ -91,12 +92,18 @@ export interface DemoService {
 /** Bloques de movimientos sueltos: uno por semana, como mucho este número de borradores. */
 export const DEMO_BLOCK_MAX = 400;
 
-/** Reloj que el servicio mueve paso a paso (fechas del plan); hora local fija dentro del día. */
+/**
+ * Reloj que el servicio mueve paso a paso (fechas del plan); hora local fija dentro del día. Nunca pasa de
+ * `limit` (el "ahora" real): lo de hoy que se anotaría "al cerrar la caja" queda un minuto antes de ahora.
+ */
 class ScriptClock implements Clock {
   private readonly inner = new FixedClock();
+  constructor(private readonly limit: Date) {}
   at(date: IsoDate, minutes: number): void {
     this.inner.setToday(date); // mediodía local
     this.inner.advance(minutes * 60_000);
+    const cap = this.limit.getTime() - 60_000;
+    if (this.inner.now().getTime() > cap) this.inner.set(new Date(cap));
   }
   now(): Date {
     return this.inner.now();
@@ -255,7 +262,7 @@ export function createDemoService(deps: CoreDeps): DemoService {
     report: (phase: DemoPhase, done: number, total: number) => void,
   ): Promise<Mutation<DemoSeedResult>> {
     const info = DEMO_PROFILES.find((x) => x.id === p.profile) as DemoProfile;
-    const clock = new ScriptClock();
+    const clock = new ScriptClock(deps.clock.now());
     const bus = new BufferBus();
     const scripted: CoreDeps = { ...deps, clock, events: bus, audit: createAuditWriter({ clock, ids: deps.ids }) };
     const templates = createTemplatesService(scripted);
@@ -329,7 +336,9 @@ export function createDemoService(deps: CoreDeps): DemoService {
         const first = block[0]!.date;
         const last = block[block.length - 1]!.date;
         const rows = block.reduce((n, it) => n + (it.t === 'transfer' ? 2 : 1), 0);
-        clock.at(last, 8 * 60 + (minute++ % 50)); // 20:00 y pico del último día del bloque
+        // 20:00 y pico del día en que se anota el bloque (el domingo de su semana, o hoy): la historia del plan
+        // empieza después (recordedOn).
+        clock.at(recordedOn(block[block.length - 1]!, p.anchor), 8 * 60 + (minute++ % 50));
         const r = await transactions.createMany({
           workspaceId,
           batch: { source: 'demo', accountId: null, label: first === last ? `Anotado el ${ddmm(first)}` : `Anotado del ${ddmm(first)} al ${ddmm(last)}` },

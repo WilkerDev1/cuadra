@@ -568,6 +568,22 @@ describe('backup', () => {
     const again = await h!.driver.get<{ value: string }>("SELECT value FROM settings WHERE scope_id = '' AND key = 'backup.lastVerifiedAt'");
     expect(JSON.parse(again!.value)).toBe('2026-06-20T08:00:00.000Z');
   });
+  it('backup.lastVerifiedAt es local: no viaja en el respaldo y restaurar no lo pisa', async () => {
+    const { backup } = await setup();
+    await backup.markVerified('2026-06-01T08:00:00.000Z');
+    const out = await backup.export({ scope: 'all' });
+    expect(JSON.stringify(out.file.tables.settings)).not.toContain('backup.lastVerifiedAt');
+    await backup.markVerified('2026-06-14T08:00:00.000Z');
+    await backup.restoreAll(out.text, { confirm: true });
+    const row = await h!.driver.get<{ value: string }>("SELECT value FROM settings WHERE scope_id = '' AND key = 'backup.lastVerifiedAt'");
+    expect(JSON.parse(row!.value)).toBe('2026-06-14T08:00:00.000Z');
+  });
+
+  it('un respaldo cifrado de un espacio no lleva el nombre del espacio en el nombre sugerido', async () => {
+    const { backup, s } = await setup();
+    const out = await backup.export({ scope: 'workspace', workspaceId: s.wsA, password: 'clave segura' });
+    expect(out.suggestedName).toBe('cuadra-2026-06-15.cuadra.json');
+  });
 });
 
 describe('backup-upgrades', () => {

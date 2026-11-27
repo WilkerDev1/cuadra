@@ -63,17 +63,3 @@ export function sparkPoints(values: readonly number[], w: number, h: number, pad
   const step = values.length > 1 ? w / (values.length - 1) : 0;
   return values.map((v, i) => ({ x: r(i * step), y: r(h - pad - ((v - min) / span) * (h - pad * 2)) }));
 }
-
-/** Sector de anillo entre las fracciones `a0`..`a1` (0–1, sentido horario desde arriba). */
-export function arcPath(cx: number, cy: number, ro: number, ri: number, a0: number, a1: number): string {
-  const pt = (rad: number, f: number) => {
-    const ang = f * Math.PI * 2 - Math.PI / 2;
-    return { x: r(cx + rad * Math.cos(ang)), y: r(cy + rad * Math.sin(ang)) };
-  };
-  const large = a1 - a0 > 0.5 ? 1 : 0;
-  const p0 = pt(ro, a0);
-  const p1 = pt(ro, a1);
-  const q1 = pt(ri, a1);
-  const q0 = pt(ri, a0);
-  return `M${p0.x} ${p0.y}A${ro} ${ro} 0 ${large} 1 ${p1.x} ${p1.y}L${q1.x} ${q1.y}A${ri} ${ri} 0 ${large} 0 ${q0.x} ${q0.y}Z`;
-}

@@ -7,10 +7,11 @@ import { useCuadraMutation } from '../../../app/data/useCuadraMutation';
 import { useSheet } from '../../../app/registry/sheet';
 import type { Direction, Minor, Transaction } from '../../../core';
 import { t as tGlobal, useT } from '../../../i18n';
-import { DateField, InfoTip, Segmented } from '../../../ui';
+import { InfoTip, Segmented } from '../../../ui';
 import { useCurrency, useKeypadMode, useToday } from '../hooks';
 import { exprFromMinor } from '../logic/amount';
 import { AmountEntry } from './AmountEntry';
+import { DateGroup } from './DateGroup';
 
 export function OpeningForm({ original }: { original: Transaction }) {
   const t = useT('capture');
@@ -74,10 +75,7 @@ export function OpeningForm({ original }: { original: Transaction }) {
         error={saveError}
         autoFocus
       >
-        <div className="cap-group">
-          <span className="cap-label">{t('date.label')}</span>
-          <DateField value={date} onChange={(d) => d !== '' && setDate(d)} today={today} />
-        </div>
+        <DateGroup label={t('date.label')} value={date} onChange={(d) => d !== '' && setDate(d)} today={today} />
       </AmountEntry>
     </div>
   );

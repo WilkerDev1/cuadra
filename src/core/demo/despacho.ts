@@ -103,13 +103,15 @@ export function planDespacho(opts: PlanOptions): DemoPlan {
 
   // ── Facturas cobradas: 14–22 al mes, cobro con 0–45 días de retraso ──
   const invoicesFor = (m: IsoDate, mi: number) => {
-    const invoices = rng.int(14, 22);
+    // Enero y agosto son flojos (vacaciones de los clientes); el resto, 14–20 facturas.
+    const month = Number(m.slice(5, 7));
+    const invoices = month === 1 ? rng.int(7, 10) : month === 8 ? rng.int(10, 13) : rng.int(14, 20);
     for (let i = 0; i < invoices; i += 1) {
       // En el tercer mes un cliente se anotó con otro nombre ("Costa Azul Hoteles"): luego se fusiona.
       const client = mi === 2 && i < 2 ? { key: 'costa_azul_dup', label: 'Costa Azul Hoteles' } : rng.pick(CLIENTES);
       const invoiceDate = dayIn(m, rng.int(1, 28));
       const paid = addDays(invoiceDate, rng.int(0, 45));
-      const amount = roundToUnit(percentOf(rng.rangeMinor(rd(12_000), rd(140_000), rd(500)), seasonPercent(invoiceDate)), rd(500));
+      const amount = roundToUnit(percentOf(rng.rangeMinor(rd(12_000), rd(95_000), rd(500)), seasonPercent(invoiceDate)), rd(500));
       const servicio = rng.chance(0.9);
       const exento = client.key === 'escuela_arcoiris' || client.key === 'clinica_vida';
       const values: DemoValues = {
@@ -154,8 +156,11 @@ export function planDespacho(opts: PlanOptions): DemoPlan {
     b.tx({ account: 'banco_operativo', kind: 'expense', amountMinor: Math.max(rd(100), roundToUnit(percentOf(prevIncome, 6), rd(10))), date: dayIn(m, 20), description: 'ITBIS del mes anterior (IT-1)', values: { categoria: 'itbis_pagado', centro_costo: 'administracion', metodo_pago: 'transferencia', itbis: 'exento' } });
     b.tx({ account: 'banco_operativo', kind: 'expense', amountMinor: rd(12_000), date: dayIn(m, 25), description: 'Honorarios del contador', values: { categoria: 'honorarios', centro_costo: 'administracion', metodo_pago: 'transferencia', contacto: 'contador', ncf: ncf('B11', (ncfOut += 1)), itbis: 'gravado_18' } });
     b.tx({ account: 'banco_operativo', kind: 'expense', amountMinor: rd(3_800), date: dayIn(m, 4), description: 'Seguro de equipos', values: { categoria: 'seguros', centro_costo: 'administracion', metodo_pago: 'debito_automatico', itbis: 'gravado_16' } });
-    for (const e of EQUIPO) {
-      b.tx({ account: 'banco_operativo', kind: 'expense', amountMinor: e.amount, date: dayIn(m, 28), description: `Nómina — ${e.who}`, values: { categoria: 'nomina', centro_costo: e.centro, metodo_pago: 'transferencia', itbis: 'exento' } });
+    // Nómina quincenal: la mitad del sueldo el 15 y la otra mitad el 30 (o el último día del mes).
+    for (const [day, q] of [[15, '1.ª'], [30, '2.ª']] as const) {
+      for (const e of EQUIPO) {
+        b.tx({ account: 'banco_operativo', kind: 'expense', amountMinor: e.amount / 2, date: dayIn(m, day), description: `Nómina ${q} quincena — ${e.who}`, values: { categoria: 'nomina', centro_costo: e.centro, metodo_pago: 'transferencia', itbis: 'exento' } });
+      }
     }
     if (m.slice(5, 7) === '12') {
       for (const e of EQUIPO) {
@@ -163,7 +168,16 @@ export function planDespacho(opts: PlanOptions): DemoPlan {
       }
     }
     b.tx({ account: 'banco_operativo', kind: 'expense', amountMinor: rng.rangeMinor(rd(250), rd(600), rd(5)), date: lastDayOfMonth(m), description: 'Comisiones bancarias', values: { categoria: 'gastos_bancarios', centro_costo: 'administracion', metodo_pago: 'debito_automatico', itbis: 'exento' } });
-
+    // Anticipo mensual del impuesto sobre la renta y, en abril, el saldo de la declaración anual (IR-2).
+    b.tx({ account: 'banco_operativo', kind: 'expense', amountMinor: Math.max(rd(100), roundToUnit(percentOf(prevIncome, 1), rd(10))), date: dayIn(m, 15), description: 'Anticipo del impuesto sobre la renta', values: { categoria: 'impuestos', centro_costo: 'administracion', metodo_pago: 'transferencia', itbis: 'exento' } });
+    if (m.slice(5, 7) === '04') {
+      b.tx({ account: 'banco_operativo', kind: 'expense', amountMinor: rd(185_000), date: dayIn(m, 28), description: 'Impuesto sobre la renta del año anterior (IR-2)', values: { categoria: 'impuestos', centro_costo: 'administracion', metodo_pago: 'transferencia', itbis: 'exento' } });
+    }
+    if (mi === 6) {
+      b.tx({ account: 'banco_operativo', kind: 'expense', amountMinor: rd(168_000), date: dayIn(m, 9), description: 'Compra de dos computadoras para diseño', values: { categoria: 'equipos', centro_costo: 'diseno', metodo_pago: 'transferencia', ncf: ncf('B01', (ncfOut += 1)), itbis: 'gravado_18' } });
+    }
+    // Los socios retiran cada mes y, al cerrar el trimestre, se reparten parte de lo que sobra.
+    b.tx({ account: 'banco_operativo', kind: 'expense', amountMinor: rd(70_000), date: dayIn(m, 27), description: 'Retiro de los socios', values: { categoria: 'retiros_socios', centro_costo: 'administracion', metodo_pago: 'transferencia', itbis: 'exento' } });
     // ── Pagos a proveedores: 10–16 al mes, con NCF ──
     for (let i = rng.int(10, 16); i > 0; i -= 1) {
       const p = rng.pick(PROVEEDORES);
@@ -204,6 +218,17 @@ export function planDespacho(opts: PlanOptions): DemoPlan {
     }
     pettyByMonth.set(mKey, spent);
   });
+
+  // ── Al cerrar cada trimestre los socios se reparten parte de lo que sobra, sin dejar al banco por debajo
+  // de un colchón de RD$ 250,000 en lo que queda del plan ──
+  for (const m of months) {
+    if (!['03', '06', '09', '12'].includes(m.slice(5, 7))) continue;
+    const date = lastDayOfMonth(m);
+    const excess = b.lowestBalanceFrom('banco_operativo', date, openings.banco_operativo.amountMinor) - rd(250_000);
+    if (excess > rd(50_000)) {
+      b.tx({ account: 'banco_operativo', kind: 'expense', amountMinor: roundToUnit(percentOf(excess, 80), rd(1_000)), date, description: 'Distribución de utilidades a los socios', values: { categoria: 'retiros_socios', centro_costo: 'administracion', metodo_pago: 'transferencia', itbis: 'exento' } });
+    }
+  }
 
   // ── Un mes histórico importado desde Excel (el extracto del banco del cuarto mes) ──
   const im = months[3];
@@ -280,7 +305,11 @@ export function planDespacho(opts: PlanOptions): DemoPlan {
         { key: 'arrendador', label: 'Torre Empresarial del Este' },
         { key: 'contador', label: 'Lic. Ramón Peña, contador' },
       ],
-      categoria: [{ key: 'itbis_pagado', label: 'ITBIS pagado' }],
+      categoria: [
+        { key: 'itbis_pagado', label: 'ITBIS pagado' },
+        { key: 'retiros_socios', label: 'Retiros de los socios' },
+        { key: 'equipos', label: 'Equipos y mobiliario' },
+      ],
     },
     items: b.items,
     steps: b.steps,
@@ -303,7 +332,7 @@ export function planDespacho(opts: PlanOptions): DemoPlan {
         recipe: { v: 1, kind: 'summary', filter: { period: { preset: 'last_12_months' }, kinds: ['income'] }, groupBy: { by: 'field', fieldId: 'contacto' }, measure: 'in', chart: 'table' },
       },
       {
-        name: 'Anexo de ITBIS del mes pasado',
+        name: 'Anexo de ITBIS del mes anterior',
         recipe: {
           v: 1,
           kind: 'report',

@@ -15,7 +15,6 @@ import {
   Combobox,
   DateField,
   Dialog,
-  Donut,
   DoubleRule,
   EmptyState,
   Field,
@@ -47,7 +46,7 @@ import {
   amountParts,
   useToast,
 } from '../../../ui';
-import { BARS, DONUT, FIELDS, FLOWS, LINE, ROWS, SPARK, TODAY } from './sample';
+import { BARS, FIELDS, FLOWS, LINE, ROWS, SPARK, TODAY } from './sample';
 import '../gallery.css';
 
 const DOP = { code: 'DOP', minorDigits: 2, symbol: 'RD$' } as const;
@@ -674,10 +673,6 @@ function GalleryBody() {
             </Card>
             <Card>
               <Bars title={t('charts.bars')} data={BARS} />
-            </Card>
-            <Card>
-              <Donut title={t('charts.donut')} data={DONUT} centerLabel="Total" />
-              <p className="meta">{t('charts.donutNote')}</p>
             </Card>
             <Card>
               <Line title={t('charts.line')} points={LINE} step />

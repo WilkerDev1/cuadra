@@ -178,3 +178,56 @@ export function joinNames(names: readonly string[]): string {
   if (names.length <= 1) return names[0] ?? '';
   return `${names.slice(0, -1).join(', ')} y ${names.at(-1) ?? ''}`;
 }
+
+/** Minúscula inicial para nombres de campo a media frase («por categoría»); respeta siglas («CxC»). */
+export function lowerFirst(text: string): string {
+  const word = text.split(' ')[0] ?? '';
+  if (word === '' || word === word.toLowerCase() || word.slice(1) !== word.slice(1).toLowerCase()) return text;
+  return word.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/** Parte filas ordenadas por mes de su fecha (`AAAA-MM`), conservando el orden de entrada. */
+export function chunkByMonth<R extends { date: string }>(rows: readonly R[]): Array<{ month: string; rows: R[] }> {
+  const out: Array<{ month: string; rows: R[] }> = [];
+  for (const r of rows) {
+    const month = r.date.slice(0, 7);
+    const last = out.at(-1);
+    if (last !== undefined && last.month === month) last.rows.push(r);
+    else out.push({ month, rows: [r] });
+  }
+  return out;
+}
+
+interface RunningRow {
+  accountId: string;
+  direction: 'in' | 'out';
+  amountMinor: number;
+  runningMinor: number | null;
+}
+
+/**
+ * Saldo corrido por cuenta cuando el núcleo no lo dio (varias cuentas). Parte del saldo previo al periodo de cada
+ * cuenta y suma sus movimientos en el orden recibido. Solo se acepta si cuadra con el saldo final de cada cuenta
+ * (con filtros por texto, campos o montos no cuadra y se queda sin saldo, como antes).
+ */
+export function withRunningBalances<R extends RunningRow>(
+  rows: readonly R[],
+  lines: ReadonlyArray<{ account: { id: string }; periodOpeningMinor: number; closingMinor: number }>,
+): R[] | null {
+  if (rows.length === 0 || rows.some((r) => r.runningMinor !== null)) return null;
+  const balance = new Map(lines.map((l) => [l.account.id, l.periodOpeningMinor]));
+  const out: R[] = [];
+  for (const r of rows) {
+    const prev = balance.get(r.accountId);
+    if (prev === undefined) return null;
+    const next = prev + (r.direction === 'in' ? r.amountMinor : -r.amountMinor);
+    balance.set(r.accountId, next);
+    out.push({ ...r, runningMinor: next });
+  }
+  const seen = new Set(rows.map((r) => r.accountId));
+  for (const l of lines) {
+    const end = seen.has(l.account.id) ? balance.get(l.account.id) : l.periodOpeningMinor;
+    if (end !== l.closingMinor) return null;
+  }
+  return out;
+}

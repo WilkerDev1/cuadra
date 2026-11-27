@@ -16,6 +16,7 @@ import { editDistance, normalizeSearch } from '../text';
 import type { AppliesTo, Field, FieldOption, FieldRole, FieldType, Id, Mutation } from '../types';
 import { mutate, readTx, type CoreDeps, type UowCtx } from '../uow';
 import { requireWorkspace } from './workspaces';
+import { assertMaxLength, MAX_LABEL_LENGTH } from './validation';
 
 export interface FormSchema {
   // F-25: lo que el formulario pinta, ya ordenado
@@ -102,6 +103,7 @@ export function uniqueKey(base: string, taken: ReadonlySet<string>): string {
 function cleanLabel(label: unknown): string {
   const trimmed = typeof label === 'string' ? label.trim() : '';
   if (trimmed === '') throw new DomainError('name_required', { field: 'label' });
+  assertMaxLength(trimmed, MAX_LABEL_LENGTH, 'label');
   return trimmed;
 }
 

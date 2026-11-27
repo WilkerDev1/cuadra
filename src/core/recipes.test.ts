@@ -73,7 +73,7 @@ const account = (id: string, name: string): Account => ({
 const ACCOUNTS = [account(ID.caja, 'Caja'), account(ID.banco, 'Banco')];
 
 describe('validateRecipe', () => {
-  it('avisa de campos inactivos y quita condiciones de campos que no existen', () => {
+  it('avisa de campos inactivos y conserva (con aviso) las condiciones sobre lo que ya no existe', () => {
     const recipe: ViewRecipe = {
       v: 1,
       kind: 'filter',
@@ -89,6 +89,9 @@ describe('validateRecipe', () => {
     const { recipe: out, warnings } = validateRecipe(recipe, FIELDS);
     expect(out.filter.fields).toEqual([
       { fieldId: ID.old, op: 'between', min: 1 },
+      // Un campo borrado no tiene valores: la condición casa con lo mismo y no se quita (no ensancha).
+      { fieldId: ID.ghost, op: 'empty' },
+      // Con opciones vivas, la borrada sobra (no casa con nada en el OR).
       { fieldId: ID.cat, op: 'any_of', optionIds: [ID.ventas, ID.luz] },
     ]);
     expect(out.columns).toEqual([ID.ref, 'date']);
@@ -97,10 +100,21 @@ describe('validateRecipe', () => {
         { code: 'field_inactive', fieldId: ID.old },
         { code: 'field_missing', fieldKeyOrId: ID.ghost },
         { code: 'option_inactive', fieldId: ID.cat, optionId: ID.luz },
+        { code: 'option_missing', fieldId: ID.cat, optionId: ID.ghost },
       ]),
     );
     // No muta la receta original.
     expect(recipe.filter.fields).toHaveLength(3);
+  });
+
+  it('si todas las opciones de un any_of ya no existen, conserva la condición: no casa con nada', () => {
+    const { recipe, warnings } = validateRecipe(
+      { v: 1, kind: 'filter', filter: { fields: [{ fieldId: ID.cat, op: 'any_of', optionIds: [ID.ghost] }] } },
+      FIELDS,
+    );
+    // optionIds: [] significaría "sin restricción" (chip limpio) y la vista mostraría todo el espacio.
+    expect(recipe.filter.fields).toEqual([{ fieldId: ID.cat, op: 'any_of', optionIds: [ID.ghost] }]);
+    expect(warnings).toEqual([{ code: 'option_missing', fieldId: ID.cat, optionId: ID.ghost }]);
   });
 
   it('quita condiciones con operador incompatible con el tipo', () => {

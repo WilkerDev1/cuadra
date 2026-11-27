@@ -113,6 +113,29 @@ describe('nodeDriver', () => {
     expect((await db.all('SELECT label FROM t ORDER BY id')).map((r) => r['label'])).toEqual(['a', 'b', 'c', 'f', 'h']);
   });
 
+  it('runSeries ejecuta sentencias distintas en orden, en una ida, y es atómico', async () => {
+    const series = db.runSeries!;
+    expect(
+      await series([
+        { sql: 'INSERT INTO t (label) VALUES (?)', params: ['a'] },
+        { sql: "UPDATE t SET label = label || '!' WHERE label = ?", params: ['a'] },
+        { sql: 'INSERT INTO t (label) VALUES (?)', params: ['b'] },
+        { sql: "UPDATE t SET label = 'zz' WHERE label = 'nada'" },
+      ]),
+    ).toEqual({ changes: [1, 1, 1, 0] });
+    await expect(
+      series([
+        { sql: 'INSERT INTO t (label) VALUES (?)', params: ['c'] },
+        { sql: 'INSERT INTO t (label) VALUES (?)', params: ['b'] },
+      ]),
+    ).rejects.toBeInstanceOf(SqlError);
+    await db.transaction(async (tx) => {
+      expect(tx.runSeries).toBeTypeOf('function');
+      await tx.runSeries!([{ sql: 'INSERT INTO t (label) VALUES (?)', params: ['d'] }]);
+    });
+    expect((await db.all('SELECT label FROM t ORDER BY id')).map((r) => r['label'])).toEqual(['a!', 'b', 'd']);
+  });
+
   it('RAISE(ABORT, código conocido) llega como DomainError; el resto como SqlError con resultCode', async () => {
     await db.run('INSERT INTO guarded (id) VALUES (1)');
     const err = await db.run('DELETE FROM guarded').catch((e: unknown) => e);

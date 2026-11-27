@@ -3,8 +3,9 @@
 // el Excel convierte el texto decimal canónico a número (una cadena como "1234.50" es exacta para el doble más
 // cercano; dividir 123450 / 100 no lo sería siempre).
 import Papa from 'papaparse';
-import { Money, sheetToRows } from '../../core';
+import { Money, csvSafeText, sheetToRows } from '../../core';
 import type { Sheet, SheetCell, SheetColumn, Translate } from '../../core';
+import { saveFile } from '../../app/data/download';
 
 // ── CSV ─────────────────────────────────────────────────────────────────────────────────
 
@@ -16,8 +17,8 @@ export function sheetsToCsv(sheets: readonly Sheet[]): string {
   const rows: SheetCell[][] = [];
   for (const sheet of sheets) {
     if (rows.length > 0) rows.push([]);
-    if (sheets.length > 1) rows.push([sheet.name]);
-    rows.push(...sheetToRows(sheet));
+    if (sheets.length > 1) rows.push([csvSafeText(sheet.name)]);
+    for (const row of sheetToRows(sheet)) rows.push(row);
   }
   return `\uFEFF${Papa.unparse(rows, { newline: '\r\n' })}`;
 }
@@ -117,16 +118,7 @@ export function fileStem(...parts: readonly string[]): string {
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.rel = 'noopener';
-  document.body.append(a);
-  a.click();
-  a.remove();
-  // Margen para que el navegador empiece la descarga antes de soltar el objeto.
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  void saveFile(blob, filename);
 }
 
 /** ¿Se pueden compartir archivos desde este navegador? (Web Share nivel 2) */

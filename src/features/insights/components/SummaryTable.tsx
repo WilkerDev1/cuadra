@@ -1,12 +1,14 @@
 // Tabla del Resumen: un grupo por fila (subgrupos debajo), Entradas/Salidas/Neto/Movimientos y, al comparar,
 // el valor anterior de la medida y la variación en texto llano. Totales con doble raya. Cada grupo enlaza a
-// sus movimientos.
+// sus movimientos. Con muchos grupos (p. ej. por día de todo el historial) pinta una ventana de grupos enteros y
+// ofrece «Mostrar más»; los totales siempre suman todos los grupos.
+import { useState } from 'react';
 import { Link } from 'react-router';
 import type { Currency } from '../../../core';
 import { useT } from '../../../i18n';
 import { getLocale } from '../../../i18n/format';
-import { AmountText, Table, cx, type TableColumn } from '../../../ui';
-import { change, measureOf, sumGroups, tableRows, type Point, type TableRow } from '../model/series';
+import { AmountText, Button, Table, cx, type TableColumn } from '../../../ui';
+import { change, measureOf, sumGroups, TABLE_ROW_BUDGET, tableRows, tableWindow, type Point, type TableRow } from '../model/series';
 import type { Measure } from '../model/state';
 import { ValueText } from './SummaryChart';
 
@@ -16,14 +18,19 @@ export interface SummaryTableProps {
   compare: boolean;
   currency: Currency;
   groupHeader: string;
+  /** Agrupado por tiempo: la ventana muestra los grupos más recientes. */
+  time: boolean;
   hrefFor: (row: TableRow) => string;
   /** Texto plano de una diferencia con signo («+RD$1,200.00»). */
   diffText: (v: number) => string;
 }
 
-export function SummaryTable({ points, measure, compare, currency, groupHeader, hrefFor, diffText }: SummaryTableProps) {
+export function SummaryTable({ points, measure, compare, currency, groupHeader, time, hrefFor, diffText }: SummaryTableProps) {
   const t = useT();
-  const rows = tableRows(points);
+  const [budget, setBudget] = useState(TABLE_ROW_BUDGET);
+  const win = tableWindow(tableRows(points), budget, time);
+  const rows = win.rows;
+  const nf = new Intl.NumberFormat(getLocale());
   const total = sumGroups(points.map((p) => p.group));
   const prevTotal = points.reduce((s, p) => s + (p.prev ?? 0), 0);
   const curTotal = points.reduce((s, p) => s + p.value, 0);
@@ -66,8 +73,8 @@ export function SummaryTable({ points, measure, compare, currency, groupHeader, 
       align: 'end',
       numeric: true,
       hideStacked: true,
-      render: (r) => new Intl.NumberFormat(getLocale()).format(r.group.count),
-      footer: <span className="ins-rule-double num">{new Intl.NumberFormat(getLocale()).format(total.count)}</span>,
+      render: (r) => nf.format(r.group.count),
+      footer: <span className="ins-rule-double num">{nf.format(total.count)}</span>,
     },
     ...(compare
       ? ([
@@ -90,7 +97,7 @@ export function SummaryTable({ points, measure, compare, currency, groupHeader, 
         ] satisfies TableColumn<TableRow>[])
       : []),
   ];
-  return (
+  const table = (
     <Table
       variant="summary"
       caption={t('insights.table.caption')}
@@ -100,6 +107,20 @@ export function SummaryTable({ points, measure, compare, currency, groupHeader, 
       footer
       className="ins-table"
     />
+  );
+  if (win.hiddenGroups === 0) return table;
+  const shown = nf.format(win.totalGroups - win.hiddenGroups);
+  const all = nf.format(win.totalGroups);
+  return (
+    <>
+      {table}
+      <div className="ins-table__more">
+        <p className="ins-meta">{t(time ? 'insights.table.partialRecent' : 'insights.table.partialFirst', { shown, total: all })}</p>
+        <Button variant="secondary" onClick={() => setBudget((b) => b + TABLE_ROW_BUDGET)}>
+          {t(time ? 'insights.table.moreEarlier' : 'insights.table.more')}
+        </Button>
+      </div>
+    </>
   );
 }
 

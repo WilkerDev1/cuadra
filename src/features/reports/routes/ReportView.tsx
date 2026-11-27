@@ -1,5 +1,5 @@
 // /e/:wsId/informes/:id  (resumido | detallado | id de una vista guardada). DESIGN 10.12.
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { ChevronLeft, FileDown, FileSpreadsheet, Printer, Share2, SlidersHorizontal } from 'lucide-react';
 import { useCuadra } from '../../../app/data/CuadraProvider';
@@ -35,7 +35,7 @@ import {
   sameConfig,
   type ReportConfig,
 } from '../model';
-import { ReportPaper, documentTitle } from '../ReportPaper';
+import { ReportPaper, documentTitle, paperZoom } from '../ReportPaper';
 import { useReportDoc } from '../useReport';
 import '../reports.css';
 
@@ -57,7 +57,25 @@ export function Component() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [exporting, setExporting] = useState<Exporting>(null);
   const [canShare, setCanShare] = useState(false);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
   useEffect(() => setCanShare(canShareFiles()), []);
+
+  // En tableta la hoja es una Carta a escala, no una tabla apilada: se mide el escenario y se reduce.
+  useEffect(() => {
+    const el = stageRef.current;
+    if (el === null || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const cs = getComputedStyle(el);
+      const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      setZoom(paperZoom(inner, rootPx));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const preset = isPresetId(id);
   const view = preset ? undefined : views.data?.find((v) => v.id === id);
@@ -71,7 +89,8 @@ export function Component() {
   }, [config, baseConfig, view, cuadra]);
 
   const report = useReportDoc(wsId, recipe);
-  const doc = report.data;
+  // El documento puede ser enorme (12 meses de detalle): la configuración responde primero y la hoja se pinta después.
+  const doc = useDeferredValue(report.data);
   const dirty = view !== undefined && config !== null && baseConfig !== null && !sameConfig(config, baseConfig);
 
   const change = (next: ReportConfig) => {
@@ -199,7 +218,7 @@ export function Component() {
           {form}
         </aside>
 
-        <div className="rep-stage" aria-busy={report.isFetching}>
+        <div className="rep-stage" ref={stageRef} aria-busy={report.isFetching}>
           {report.isError ? (
             <Banner
               tone="warn"
@@ -214,7 +233,7 @@ export function Component() {
           ) : doc === undefined ? (
             <Skeleton label={t('loading')} rows={6} />
           ) : (
-            <ReportPaper doc={doc} title={heading} kindLine={view === undefined ? undefined : title} />
+            <ReportPaper doc={doc} title={heading} kindLine={view === undefined ? undefined : title} zoom={zoom} />
           )}
         </div>
       </div>

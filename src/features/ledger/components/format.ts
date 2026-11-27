@@ -33,6 +33,12 @@ export function longDate(iso: string): string {
   return capital(clean(fmt('long', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }).format(noon(iso))));
 }
 
+/** «24 nov», con año («24 nov 2025») si no es el de `today`: para metas de fila que deben caber en móvil. */
+export function shortDate(iso: string, today: string): string {
+  const f = iso.slice(0, 4) === today.slice(0, 4) ? fmt('short', { day: 'numeric', month: 'short' }) : fmt('shortY', { day: 'numeric', month: 'short', year: 'numeric' });
+  return clean(f.format(noon(iso)));
+}
+
 /** «26 nov 2026, 14:32» en la hora local del equipo. */
 export function dateTime(ts: string): string {
   const d = new Date(ts);

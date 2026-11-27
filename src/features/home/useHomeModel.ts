@@ -74,7 +74,7 @@ export function useAttention(data: DashboardData | undefined, links: HomeLinks):
         detail: { minor: Math.abs(one.differenceMinor), kind: one.differenceMinor >= 0 ? 'income' : 'expense' },
       });
     } else if (unb.length > 1) {
-      items.push({ id: 'batches', text: t('home.attention.unbalancedMany', { n: unb.length }), href: `/e/${ws}/lotes` });
+      items.push({ id: 'batches', text: t('home.attention.unbalancedMany', { n: unb.length }), href: `/e/${ws}/lotes?ver=descuadrados` });
     }
     const pairs = findPossibleDuplicates(recent.data?.items ?? []);
     const first = pairs[0];

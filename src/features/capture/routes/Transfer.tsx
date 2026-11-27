@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { useAccounts, useWorkspaceId } from '../../../app/data/hooks';
 import { useCuadraQuery } from '../../../app/data/useCuadraQuery';
 import { useT } from '../../../i18n';
-import { LoadError, Loading, NoAccounts } from '../components/States';
+import { LoadError, Loading, NoAccounts, OtherWorkspace } from '../components/States';
 import { TransferForm } from '../components/TransferForm';
 import { useCurrency, useToday } from '../hooks';
 import { exprFromMinor } from '../logic/amount';
@@ -17,7 +17,7 @@ export function Component() {
   const ws = useWorkspaceId();
   const today = useToday();
   const currency = useCurrency();
-  const accounts = useAccounts();
+  const accounts = useAccounts({ includeArchived: true });
   const fromTx = search.get('desde');
   const dup = useCuadraQuery({
     key: ['capture.duplicate', ws, fromTx ?? ''],
@@ -32,6 +32,7 @@ export function Component() {
   if (active.length < 2) return <NoAccounts message={t('state.needTwo')} />;
 
   const d = dup.data;
+  if (d !== undefined && !accounts.data.some((a) => a.id === ('fromAccountId' in d ? d.fromAccountId : d.accountId))) return <OtherWorkspace />;
   if (d !== undefined && 'fromAccountId' in d) {
     const pair = defaultPair(accounts.data, d.fromAccountId, d.toAccountId);
     return (

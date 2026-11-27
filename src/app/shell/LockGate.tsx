@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, type ComponentType, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, type ComponentType, type ReactNode } from 'react';
+import { htmlAttrs } from '../../ui/lib';
 import { attachIdleLock, useAuth } from '../data/auth';
 import { useCuadra } from '../data/CuadraProvider';
 import { useLockScreenDef } from '../registry/hooks';
@@ -40,13 +41,55 @@ export function LockGate({ children }: { children: ReactNode }) {
         {children}
       </div>
       {locked && LockScreen !== null ? (
-        // La app (con su <main>) queda oculta: la pantalla de bloqueo es el contenido principal.
-        <main className="lock-layer">
+        <LockLayer>
           <Suspense fallback={<LoadingScreen />}>
             <LockScreen busy={!auth.ready} />
           </Suspense>
-        </main>
+        </LockLayer>
       ) : null}
     </>
+  );
+}
+
+/**
+ * La pantalla de bloqueo va en un `<dialog>` modal: si al bloquear había una hoja o un diálogo modal abierto (ocultos
+ * con la app, pero aún `:modal`), todo lo que no esté en el último modal es inerte y el campo de contraseña no
+ * recibiría toques. Siendo el último modal, la pantalla de bloqueo es lo único activo. Si algo de la app de detrás
+ * abre otro modal mientras tanto (un enlace directo a una hoja, p. ej.), el bloqueo vuelve a ponerse encima.
+ * Esc no la cierra; si el navegador la cierra igualmente, se vuelve a abrir.
+ */
+function LockLayer({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    let alive = true;
+    const raise = () => {
+      if (!alive || !el.isConnected) return;
+      if (el.open) el.close();
+      el.showModal();
+    };
+    el.showModal();
+    const observer = new MutationObserver((records) => {
+      const otherOpened = records.some((r) => r.target !== el && r.target instanceof HTMLDialogElement && r.target.open);
+      if (otherOpened) raise();
+    });
+    observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
+    const onClose = () => requestAnimationFrame(() => {
+      if (alive && !el.open) el.showModal();
+    });
+    el.addEventListener('close', onClose);
+    return () => {
+      alive = false;
+      observer.disconnect();
+      el.removeEventListener('close', onClose);
+      if (el.open) el.close();
+    };
+  }, []);
+  return (
+    <dialog ref={ref} className="lock-layer" onCancel={(e) => e.preventDefault()} {...htmlAttrs({ closedby: 'none' })}>
+      {/* La app (con su <main>) queda oculta: la pantalla de bloqueo es el contenido principal. */}
+      <main className="lock-layer__main">{children}</main>
+    </dialog>
   );
 }

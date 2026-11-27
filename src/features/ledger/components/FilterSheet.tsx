@@ -4,7 +4,7 @@ import type { Account, Field, FieldCondition, TxFilter, TxKind } from '../../../
 import { Money, systemClock } from '../../../core';
 import { useMoneyParse } from '../../../app/data/hooks';
 import { useT } from '../../../i18n';
-import { Button, Chip, DateField, Field as FormField, Input, Segmented, Sheet } from '../../../ui';
+import { Button, Chip, cssColor, DateField, Field as FormField, Input, Segmented, Sheet } from '../../../ui';
 import { setFieldCondition, toggle } from '../logic/filterChips';
 
 const KINDS: TxKind[] = ['income', 'expense', 'transfer', 'opening'];
@@ -36,10 +36,6 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** Color de opción guardado como `tint-N` o `#rrggbb` → valor CSS. */
-function cssColor(color: string): string {
-  return /^tint-[1-8]$/.test(color) ? `var(--${color})` : color;
-}
-
 function minorToText(minor: number | undefined, digits: number): string {
   return minor === undefined ? '' : Money.toDecimalString(minor, digits);
 }

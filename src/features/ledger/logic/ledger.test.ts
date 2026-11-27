@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AuditEntry, Batch, Field, Totals, TransactionRow } from '../../../core';
-import { batchBalance } from './batch';
+import { batchBalance, batchRowSummary } from './batch';
+import { belongsTo } from './workspace';
 import { activeDayIndex, collapseTransfers, groupByDay, padSeq } from './days';
 import { exportFileName, moneyFormat, sheetToCsv, sheetToXlsxData } from './exportFile';
 import { filterChips, setFieldCondition, toggle } from './filterChips';
@@ -280,6 +281,7 @@ describe('batch', () => {
     createdAt: '',
     activeCount: 6,
     voidedCount: 0,
+    restorableCount: 0,
   };
   it('descuadre y acciones', () => {
     expect(batchBalance(batch, totals)).toEqual({
@@ -289,8 +291,36 @@ describe('batch', () => {
       balanced: false,
       canVoid: true,
       canRestore: false,
+      restorableCount: 0,
     });
-    const voided = batchBalance({ ...batch, activeCount: 0, voidedCount: 6, controlTotalMinor: null }, { ...totals, outMinor: 0 });
+    const voided = batchBalance({ ...batch, activeCount: 0, voidedCount: 6, restorableCount: 6, controlTotalMinor: null }, { ...totals, outMinor: 0 });
     expect([voided.differenceMinor, voided.balanced, voided.canVoid, voided.canRestore]).toEqual([null, true, false, true]);
+  });
+  it('restaurar sigue disponible si se revivió a mano parte de un lote anulado', () => {
+    // Lote de 7 anulado; luego se restauró uno a mano: 1 activo y 6 anulados con el lote.
+    const partial = batchBalance({ ...batch, activeCount: 1, voidedCount: 6, restorableCount: 6 }, { ...totals, outMinor: 284000 });
+    expect([partial.canVoid, partial.canRestore, partial.restorableCount]).toEqual([true, true, 6]);
+  });
+  it('lo anulado a mano no se restaura con el lote', () => {
+    const byHand = batchBalance({ ...batch, activeCount: 0, voidedCount: 6, restorableCount: 0 }, { ...totals, outMinor: 0 });
+    expect([byHand.canVoid, byHand.canRestore]).toEqual([false, false]);
+  });
+  it('fila de la lista: monto con signo y estado del cuadre', () => {
+    expect(batchRowSummary(batch, totals)).toEqual({ amount: { minor: 1264000, kind: 'expense' }, status: 'missing', gapMinor: 236000 });
+    const sales = { ...totals, inMinor: 2477500, outMinor: 0, netMinor: 2477500 };
+    expect(batchRowSummary({ ...batch, controlTotalMinor: 2477500 }, sales)).toEqual({ amount: { minor: 2477500, kind: 'income' }, status: 'balanced', gapMinor: null });
+    expect(batchRowSummary({ ...batch, controlTotalMinor: 2000000 }, sales).status).toBe('extra');
+    expect(batchRowSummary({ ...batch, controlTotalMinor: null }, sales).status).toBe('noControl');
+    expect(batchRowSummary({ ...batch, activeCount: 0, voidedCount: 6 }, { ...totals, outMinor: 0 })).toEqual({ amount: null, status: 'voided', gapMinor: null });
+    // Solo saldos iniciales: suma neutra, sin signo de entrada o salida.
+    const openings = { ...totals, outMinor: 0, openingsMinor: 500000 };
+    expect(batchRowSummary({ ...batch, controlTotalMinor: null }, openings).amount).toEqual({ minor: 500000, kind: null });
+  });
+});
+
+describe('belongsTo', () => {
+  it('solo lo del espacio de la ruta', () => {
+    expect(belongsTo({ workspaceId: 'w1' }, 'w1')).toBe(true);
+    expect(belongsTo({ workspaceId: 'w2' }, 'w1')).toBe(false);
   });
 });

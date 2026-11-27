@@ -58,6 +58,13 @@ export default {
   'insights.table.change': 'Variación',
   'insights.table.total': 'Total',
   'insights.table.open': 'Ver movimientos de {label}',
+  'insights.table.partialRecent': 'Se ven los {shown} grupos más recientes de {total}. El total suma todos.',
+  'insights.table.partialFirst': 'Se ven {shown} de {total} grupos. El total suma todos.',
+  'insights.table.moreEarlier': 'Mostrar anteriores',
+  'insights.table.more': 'Mostrar más',
+  'insights.table.show': 'Ver como tabla',
+  'insights.edit.label': 'Editar resumen',
+  'insights.edit.done': 'Listo',
 
   'insights.filters.edit': 'Filtros',
   'insights.filters.account': 'Cuenta',

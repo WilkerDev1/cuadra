@@ -13,7 +13,7 @@ export function FormPreview({ field }: { field: Field }) {
   const [kind, setKind] = useState<Kind>(field.appliesTo === 'in' ? 'income' : 'expense');
   const schema = useFormSchema(kind);
   const fields = schema.data?.fields ?? [];
-  const present = fields.some((f) => f.id === field.id);
+  const present = schema.isPending || fields.some((f) => f.id === field.id);
   return (
     <aside className="set-preview" aria-labelledby="set-preview-h">
       <div className="set-preview__head">

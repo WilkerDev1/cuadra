@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { selectFeatures } from './collect';
 import {
+  pickActiveNav,
   findNavByGoKey,
   findQuickActionByShortcut,
   findRegistryProblems,
@@ -173,5 +174,25 @@ describe('registro de features', () => {
         expect.arrayContaining(['más de 4 entradas primarias (5)', 'más de una lockScreen', 'ruta sheet en scope root: l2/x']),
       );
     });
+  });
+});
+
+describe('pickActiveNav', () => {
+  const paths = ['/e/w', '/e/w/movimientos', '/e/w/ajustes', '/e/w/ajustes/campos', '/respaldo'];
+  const exact = [true, false, false, false, false];
+  it('marca solo la coincidencia más larga', () => {
+    expect(pickActiveNav(paths, '/e/w/ajustes/campos', exact)).toBe(3);
+    expect(pickActiveNav(paths, '/e/w/ajustes/campos/f1', exact)).toBe(3);
+    expect(pickActiveNav(paths, '/e/w/ajustes/vistas', exact)).toBe(2);
+    expect(pickActiveNav(paths, '/e/w/ajustes', exact)).toBe(2);
+  });
+  it('el índice del espacio solo cuenta exacto', () => {
+    expect(pickActiveNav(paths, '/e/w', exact)).toBe(0);
+    expect(pickActiveNav(paths, '/e/w/', exact)).toBe(0);
+    expect(pickActiveNav(paths, '/e/w/historial', exact)).toBe(-1);
+  });
+  it('no confunde prefijos de texto con segmentos', () => {
+    expect(pickActiveNav(['/e/w/mov'], '/e/w/movimientos')).toBe(-1);
+    expect(pickActiveNav(paths, '/e/w/movimientos/tx1', exact)).toBe(1);
   });
 });

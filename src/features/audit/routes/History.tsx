@@ -9,12 +9,13 @@ import { useUiStore } from '../../../app/state/uiStore';
 import { systemClock } from '../../../core';
 import type { AuditEntry } from '../../../core';
 import { useT } from '../../../i18n';
-import { formatDate, formatDayHeader } from '../../../i18n/format';
+import { formatDate } from '../../../i18n/format';
 import { Banner, Button, EmptyState, Field, LedgerDay, PeriodPicker, Select, Skeleton } from '../../../ui';
 import { EntryRow } from '../EntryRow';
 import { downloadCsv, fileName } from '../download';
 import { exportTranslate, historyCsv, historySheet } from '../exportAudit';
 import {
+  dayHeading,
   ACTION_GROUP_KEYS,
   AUDIT_PERIODS,
   ENTITY_TYPES,
@@ -178,7 +179,7 @@ export function Component() {
                 key={d.day}
                 label={
                   <>
-                    {formatDayHeader(d.day, today)}
+                    {dayHeading(d.day, today)}
                     <span className="aud-day__date num"> · {formatDate(d.day)}</span>
                   </>
                 }

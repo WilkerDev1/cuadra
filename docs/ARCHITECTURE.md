@@ -610,7 +610,14 @@ export interface SqlExecutor {
   run(sql: string, params?: SqlParams): Promise<{ changes: number }>;
   /** Mismo SQL con muchas filas de parámetros, en una sola ida al worker. */
   runMany(sql: string, rows: readonly SqlParams[]): Promise<{ changes: number }>;
+  /**
+   * Sentencias DISTINTAS en orden, en una sola ida, atómicas. Opcional (Oleada 4): node, el worker WASM y
+   * `serialDriver` lo tienen; Tauri no. Los servicios llaman al helper `runSeries(exec, steps)`, que usa el
+   * método si existe y si no ejecuta sentencia a sentencia (mismo resultado dentro de una transacción).
+   */
+  runSeries?(steps: readonly SqlStep[]): Promise<{ changes: number[] }>;
 }
+export interface SqlStep { sql: string; params?: SqlParams }
 
 export interface SqlDriverInfo {
   kind: 'wasm-opfs' | 'wasm-memory-idb' | 'node' | 'tauri';
@@ -925,7 +932,13 @@ export type ReportSection = 'header' | 'statement' | 'by_account' | 'by_field' |
 export type TxSort = { by: 'date' | 'amount' | 'recorded_at' | 'seq'; dir: 'asc' | 'desc' };
 
 export function resolvePeriod(range: DateRange | undefined, clock: Clock): { from: IsoDate | null; to: IsoDate | null; label: string };
-/** Revisa una receta contra los campos actuales: avisa de campos inactivos, quita los inexistentes. */
+/**
+ * Revisa una receta contra los campos actuales y avisa de campos u opciones inactivos o que faltan.
+ * Regla (Oleada 4): una vista NUNCA ensancha su filtro. Si todas las opciones de un `any_of` se borraron, la
+ * condición se conserva con sus ids (no casa con nada) y avisa `option_missing`; si quedan opciones vivas, las
+ * borradas se descartan (no cambian el resultado). Un campo borrado conserva su condición con `field_missing`.
+ * Solo se descarta la condición cuyo operador no corresponde al tipo del campo (receta dañada).
+ */
 export function validateRecipe<R extends ViewRecipe>(recipe: R, fields: Field[]): { recipe: R; warnings: Warning[] };
 /** Plantillas referencian claves ('categoria', 'categoria.ventas'); en la BD se guardan ids. */
 export function resolveTemplateRecipe(recipe: unknown, keyMap: TemplateKeyMap): ViewRecipe;
@@ -1437,6 +1450,33 @@ export type BackupTable = 'workspaces' | 'accounts' | 'batches' | 'fields' | 'fi
 
 **Mensajes del historial.** Cada acción guarda `message` (clave i18n) y `params`; los textos están en `src/i18n/es/audit.ts` (y `auth.audit.*` en `auth.ts`). Los montos viajan en unidad menor y la UI los formatea con `Money.format`; una prueba comprueba que toda clave `audit.*` del núcleo tiene texto.
 
+### 3.9 Notas de la Oleada 4 (cambios de API y de rendimiento)
+
+**Puerto.** `SqlExecutor.runSeries?` (ver 3.1) y el helper `runSeries(exec, steps)`. Se exportan desde `src/core/index.ts` `csvSafeText` y el tipo `SqlStep`.
+
+**Escritura en bloque.** `insertRows` (de `createMany`, `insertBatch`, importación y demo) calcula los `seq` de antemano y manda el INSERT del lote más los pares «reservar `seq` + INSERT» en un solo `runSeries`; el trigger `tx_seq_reserved` no cambia y aborta si algún número no cuadra, así que la migración 002 sigue sin hacer falta. `loadWorkspaceContext` lee espacio, cuentas, campos y opciones en una sola consulta JSON. En `insertBatch` el saldo final solo se consulta para las cuentas que bajan. Carga de los datos de ejemplo en producción (`vite preview`, perfil nuevo): de 22,0 s y 26 930 mensajes al worker a unos 6 s y 8 461 mensajes, mismo resultado.
+
+**Lecturas.**
+- `listTransactions`: las páginas con cursor reutilizan los totales de la primera si el filtro resuelto es el mismo y `total_changes()` no cambió (una sola conexión, ADR-9). El tipo de retorno no cambia.
+- `dashboard`: los posibles duplicados se buscan primero en la ventana de 90 días y solo se cruzan las filas cuyo monto se repite en la misma cuenta, sentido y tipo. Con 20 000 movimientos el panel del año baja de unos 146 a unos 118 ms en Node (prueba `queries.perf.test.ts`, umbral 150 ms).
+- Worker `memory-idb`: un `run` solo cuenta como escritura si `sqlite3_stmt_readonly` dice que puede escribir, y un `exec` de solo BEGIN/COMMIT/END/ROLLBACK no cuenta. Las lecturas ya no vuelcan la base a IndexedDB.
+
+**Vistas.** Una vista nunca ensancha su filtro: ver la regla en 3.4. Aviso nuevo `{ code: 'option_missing'; fieldId; optionId }`, con su texto en `errors.warning.option_missing`.
+
+**Lotes.** `Batch.restorableCount` cuenta las filas anuladas con el lote (`voided_with_batch = 1`). «Restaurar lote» se ofrece mientras sea mayor que 0, aunque haya filas activas. `batches.restore` devuelve `restoredCount` en movimientos lógicos (una transferencia cuenta 1), así que con transferencias los dos números pueden no coincidir.
+
+**CSV y Excel.** `sheetToRows` protege también las cabeceras con `csvSafeText`, igual que el CSV modelo. `parseCsvText` aplica `csvUnsafeText`, la inversa exacta, a todas las celdas, así que exportar e importar devuelve el texto tal cual. `tableFromRows` y los exportadores de informes ya no usan `Math.max(...)` ni `push(...)` con miles de argumentos: con 130 000 filas leen en unos 170 ms.
+
+**Respaldo.** `backup.lastVerifiedAt` es un ajuste local (`LOCAL_ONLY_SQL`): restaurar no lo pisa con la marca del archivo. Un respaldo cifrado se llama `cuadra-AAAA-MM-DD.cuadra.json`, sin el nombre del espacio. La interfaz cifra con la contraseña de la sesión (`auth.encrypt`) y ya no ofrece una contraseña aparte para el respaldo. Los archivos antiguos hechos con otra contraseña se siguen abriendo pidiéndola.
+
+**Periodos.** `PRESET_NAMES` dice «Mes/Trimestre/Año anterior», igual que el selector. Los nombres de las vistas de plantilla también cambiaron, pero los espacios ya creados conservan el nombre guardado.
+
+**Arranque y PWA (shell).**
+- El bloque de entrada pesa 207 kB (62 kB gzip), frente a los 940 kB de antes. `react` (218 kB) y `core` (315 kB) van en grupos propios que se precargan en paralelo, y la app (router y features) se pide mientras se abre la base.
+- El plugin `bootHints` añade `preload` del wasm y del worker.
+- `main.tsx` registra el service worker siempre, y el precache ya no lleva la galería ni la fuente vietnamita (111 entradas).
+- Al compilar se añade un meta CSP con `wasm-unsafe-eval` y `connect-src 'self' ipc: http://ipc.localhost` para Tauri.
+
 ---
 
 ## 4. Invariantes y pruebas (tests-first)
@@ -1768,7 +1808,7 @@ Atajos del shell: `Ctrl+K` paleta, `n` anotar, `e`/`s`/`t` entrada/salida/transf
 
 ### 5.3 Enrutado
 
-`createHashRouter` (react-router 8.5.3, modo librería): funciona en GitHub Pages en subruta y en Tauri sin configurar servidor. `src/app/router.tsx` construye el árbol a partir de `features`. Rutas reales al cierre de la Oleada 3:
+`createHashRouter` (react-router 8.5.3, modo librería): funciona en GitHub Pages en subruta y en Tauri sin configurar servidor. `src/app/router.tsx` construye el árbol a partir de `features`. Rutas reales (cierre de la Oleada 4):
 
 ```
 /                                    → workspaces    P-01 Elegir espacio; al abrir la app entra en el último (o va a /bienvenida si no hay ninguno)
@@ -1785,11 +1825,11 @@ Atajos del shell: `Ctrl+K` paleta, `n` anotar, `e`/`s`/`t` entrada/salida/transf
 /e/:wsId/cuentas/:accountId          → ledger        P-05 Libro de una cuenta (saldo corrido)
 /e/:wsId/movimientos                 → ledger        Todos los movimientos (filtros, vistas, exportar)  ?periodo=&cuenta=&f=&vista=
 /e/:wsId/movimientos/:txId           → ledger        P-09 Detalle (hoja/inspector) + historial
-/e/:wsId/lotes                       → ledger        Lotes recientes
+/e/:wsId/lotes?ver=descuadrados      → ledger        Lotes con cuadre por fila; «Todos | Descuadrados (N)», páginas de 40
 /e/:wsId/lotes/:batchId              → ledger        Movimientos de un lote + anular/restaurar lote
 /e/:wsId/nuevo?tipo=entrada|salida&cuenta=&editar=:txId&desde=:txId&monto=   → capture P-06 (hoja, alto completo en móvil)
 /e/:wsId/transferencia?desde=:txId&monto=  → capture P-08 (hoja)
-/e/:wsId/captura                     → capture       P-07 Captura en tabla (escritorio) / Ráfaga (móvil)
+/e/:wsId/captura                     → capture       P-07 «Captura en lote»: tabla (escritorio) / ráfaga (móvil)
 /e/:wsId/resumen?vista=:viewId&…     → insights      P-10 Resumen configurable (todo el estado en la URL)
 /e/:wsId/informes                    → reports       P-11 Lista de informes
 /e/:wsId/informes/:id                → reports       Informe generado (`resumido`, `detallado` o id de vista)
@@ -1946,25 +1986,43 @@ Contratos previos: `Cuadra` completo, `app/data/hooks.ts`, `app/registry`, `ui`.
 - **4B E2E** (Sonnet medium): Playwright en 390×844 y 1440×900, claro y oscuro: crear espacio desde plantilla, registrar con teclado propio, captura en tabla con descuadre, transferencia, anular y restaurar, filtro guardado, resumen por categoría, informe a CSV, respaldo y restauración, importación CSV, segunda pestaña bloqueada.
 - **4C Revisión adversarial** (Opus high): invariantes de la sección 4.1 buscando cómo romperlos desde la UI; accesibilidad (foco, contraste, objetivos de 44 px); rendimiento con el perfil colmado.
 
+**Cierre de la Oleada 4 (27 nov 2026).** Integración, corrección y E2E en tres pasos.
+- **Integración:** datos de ejemplo desde la bienvenida (los tres perfiles), arreglos de contratos entre áreas y cáscara Tauri real (ver 7.3).
+- **Revisión adversarial y corrección:** doce áreas revisadas (núcleo, ui, shell, captura, inicio, movimientos, resumen, informes, espacios, ajustes, respaldo e importación, acceso), con un corrector por área para sus hallazgos. Los cambios de API y de rendimiento están en 3.9. Los más visibles:
+  - el respaldo sale cifrado con la contraseña de la sesión cuando el acceso está protegido;
+  - el parser de montos de la captura es el mismo `Money.parse` del núcleo («1,5» = 1.50 en es-DO);
+  - un movimiento o lote de otro espacio no se abre bajo `/e/@otro`;
+  - Lotes muestra el cuadre por fila y filtra los descuadrados;
+  - el bloqueo se pinta encima de cualquier diálogo;
+  - los atajos de una tecla se pueden apagar;
+  - el bloque de entrada baja de 940 a 207 kB.
+- **E2E:** Playwright en `e2e/` (`pnpm e2e`), contra la compilación de producción (`pnpm build && pnpm preview --port 4173`). Hay dos proyectos, móvil 390×844 (Pixel 7) y escritorio 1440×900, y cada prueba abre un perfil persistente nuevo con el Chromium de la caché (`e2e/fixtures.ts`). Los datos de ejemplo se cargan con el botón de la bienvenida, porque `window.__cuadra` no existe en producción.
+  - Los 17 casos: bienvenida → ejemplo → inicio con cifras; espacio desde plantilla con saldo inicial; salida con aritmética en el teclado propio; transferencia; captura en lote con descuadre aceptado; editar, anular y restaurar con historial; filtro y vista guardada; panel → barra → movimientos con el mismo total (solo escritorio); resumen por categoría; informe a CSV y XLSX con contenido verificado; respaldo cifrado y restauración; importar CSV; importar XLSX; guardar como plantilla y crear desde ella; contraseña → bloqueo → error → desbloqueo → recuperación con la clave; segunda pestaña bloqueada; arranque sin red.
+  - Resultado: 33 pruebas y 1 omitida (el panel en móvil), en verde dos veces seguidas en unos 3,3 min con 4 trabajadores. La de plantilla tarda unos 6 s. Casi todas las demás tardan unos 20 s, y la mayor parte se va en cargar los datos de ejemplo con 4 pruebas a la vez. La de respaldo y restauración tarda unos 33 s en escritorio y alrededor de 1 min en móvil.
+- **Puertas al cierre:** `pnpm lint` (tsc -b) sin errores; `pnpm test` con 980 pruebas en 88 archivos (las de rendimiento corren aparte y al final); `pnpm build` con un bloque de entrada de 208 kB (62 kB gzip) y 111 entradas de precache; `pnpm e2e` con 33 pruebas en verde.
+- **Barrido final** (`node scripts/sweep.mjs`, contra el servidor de desarrollo): 49 rutas de los tres espacios de ejemplo y de un espacio vacío, a 390, 768 y 1440, en claro y oscuro. Son 294 visitas, sin errores de consola, sin claves i18n sin texto y sin desbordes horizontales.
+
 ### Oleada 5 — Publicación
 
 Documentación (README, LICENSES con atribuciones), GitHub Pages (`base: './'`), binarios Tauri Linux si da tiempo. Android nativo queda fuera (faltan NDK y JDK 21); la PWA cubre Android.
 
-### 7.3 Qué va en Tauri
+### 7.3 Qué va en Tauri (real desde la Oleada 4)
 
-Solo lo que el navegador del sistema no da:
+Solo lo que el navegador del sistema no da: SQLite nativo y el diálogo «Guardar como».
 
 ```
 src-tauri/
-├── Cargo.toml        # tauri = "~2.12", tauri-build = "~2.7", rusqlite = { version = "0.43", features = ["bundled"] },
-│                     # tauri-plugin-dialog = "~2.8", tauri-plugin-fs = "~2.7", serde, serde_json
-│                     # NUNCA dejar que cargo suba a 3.0.0-alpha: rangos con "~"
-├── tauri.conf.json   # identifier, ventana 1200×800 min 360×640, frontendDist ../dist, devUrl http://localhost:5173
-├── capabilities/default.json   # core:default, dialog:allow-save, dialog:allow-open, fs:allow-write-file / read-file (scope $DOWNLOAD, $DOCUMENT)
+├── Cargo.toml        # tauri = "~2.12", tauri-build = "~2.7", tauri-plugin-dialog = "~2.8",
+│                     # rusqlite = { version = "0.43", features = ["bundled"] }, serde, serde_json
+│                     # rangos con "~": que cargo no suba a 3.0.0-alpha. Sin plugin-fs: Rust escribe el archivo.
+│                     # release: opt-level "s", lto, codegen-units 1, panic abort, strip
+├── tauri.conf.json   # app.cuadra.desktop, ventana 1200×800 (mín. 360×640), frontendDist ../dist, csp null
+│                     # (la CSP va como <meta> en el HTML de producción, ver 3.9)
+├── capabilities/default.json   # solo core:default; los comandos db_* y save_file son de la app
 └── src/
     ├── main.rs       # llama a cuadra_lib::run()
-    ├── lib.rs        # Builder + plugins + manage(DbState) + invoke_handler
-    └── db.rs         # conexión rusqlite en Mutex, en app_data_dir()/cuadra.sqlite3
+    ├── lib.rs        # Builder + plugin de diálogo + manage(DbState) + comandos
+    └── db.rs         # conexión rusqlite en Mutex, en app_data_dir()/cuadra.sqlite3 (10 pruebas cargo)
 ```
 
 Comandos (reciben el MISMO SQL que el núcleo envía al worker):
@@ -1972,13 +2030,21 @@ Comandos (reciben el MISMO SQL que el núcleo envía al worker):
 | Comando | Firma | Nota |
 |---|---|---|
 | `db_open` | `() -> DbInfo { sqlite_version, path }` | abre, `foreign_keys=ON`, `journal_mode=WAL` |
-| `db_all` | `(sql: String, params: Vec<Value>) -> Vec<Map<String, Value>>` | parámetros JSON → `rusqlite::types::Value` |
-| `db_run` | `(sql, params) -> { changes }` | |
-| `db_run_many` | `(sql, rows: Vec<Vec<Value>>) -> { changes }` | sentencia preparada reutilizada |
-| `db_exec` | `(sql: String)` | migraciones, `BEGIN IMMEDIATE`, `COMMIT`, `ROLLBACK` |
-| `db_export` | `() -> Vec<u8>` | `VACUUM INTO` archivo temporal y lectura |
+| `db_all` | `(sql, params?) -> Vec<JsonRow>` | parámetros JSON (posicionales o con nombre) → `rusqlite::types::Value`; BLOB en ida y vuelta |
+| `db_run` | `(sql, params?) -> { changes }` | |
+| `db_run_many` | `(sql, rows) -> { changes }` | sentencia preparada reutilizada, atómica |
+| `db_exec` | `(sql)` | migraciones, `BEGIN IMMEDIATE`, `COMMIT`, `ROLLBACK` |
+| `db_export` | `() -> bytes` | `VACUUM INTO` a un temporal y lectura (respuesta binaria cruda) |
+| `db_close` | `()` | checkpoint del WAL |
+| `save_file` | `(suggestedName, data: bytes) -> ruta \| null` | diálogo nativo «Guardar como» y escritura; null si se cancela |
 
-`tauriDriver.ts` implementa `SqlDriver` con `invoke` y el mismo `mutex.ts` que el worker (las transacciones son `BEGIN`/`COMMIT` explícitos sobre la única conexión). La detección en `openDatabase()`: `'__TAURI_INTERNALS__' in window` → Tauri; si no, worker OPFS; si OPFS falla, `:memory:` + IndexedDB. Respaldo en escritorio: `dialog.save()` + `fs.writeTextFile`. La lógica de negocio no entra en Rust.
+Los errores de SQLite llegan con su código (`SqlError`) y los `RAISE` de los triggers con el código de dominio como mensaje (`DomainError`). `runSeries` no está en Rust: el núcleo cae a sentencia a sentencia (3.1).
+
+**Lado TypeScript.** `src/data/tauri/tauriDriver.ts` exporta `openTauriDriver()` y `saveFileDialog()`, con 11 pruebas con un `invoke` simulado. Usa `createSerialDriver`, el mismo mutex y las mismas transacciones explícitas que el worker. `openDatabase()` lo elige con `'__TAURI_INTERNALS__' in window`; si no, worker OPFS; si OPFS falla, `:memory:` + IndexedDB. Con Tauri detectado nunca cae a WASM. Las descargas de la app (respaldo, CSV, XLSX, plantillas, clave de recuperación) pasan todas por `app/data/download.ts`: en el navegador es un enlace `download`, y en Tauri el arranque registra `save_file` con `setNativeSaver`, así que salen por el diálogo nativo. La lógica de negocio no entra en Rust.
+
+**Compilar.** Hay que usar `pnpm tauri build --no-bundle` (o `pnpm tauri build` para los paquetes). Ese comando compila `dist/` y el binario con la función `custom-protocol`. Un `cargo build --release` a secas no lleva esa función y carga `devUrl` (localhost:5173) en lugar de la app incrustada. Esa es la causa más probable de que la primera prueba de humo, la de la Oleada 3G, no abriera la base. El binario de Linux pesa unos 8 MB y la compilación incremental tarda alrededor de 1 min.
+
+**Verificado (Linux, Wayland).** El binario arranca, carga la app incrustada, `db_open` crea `~/.local/share/app.cuadra.desktop/cuadra.sqlite3` en WAL y las migraciones crean las 12 tablas. Falta recorrer la interfaz dentro de Tauri (no hay WebDriver de WebKitGTK instalado), probar `save_file` con un clic real, y probar Windows y macOS.
 
 ---
 

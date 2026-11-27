@@ -79,6 +79,25 @@ export async function openNodeDriver(options: NodeDriverOptions = {}): Promise<S
           }
           return { changes };
         }),
+      runSeries: (steps) =>
+        wrap(() => {
+          const prepared = new Map<string, StatementSync>();
+          db.exec('SAVEPOINT cuadra_run_series');
+          const changes: number[] = [];
+          try {
+            for (const step of steps) {
+              let stmt = prepared.get(step.sql);
+              if (stmt === undefined) prepared.set(step.sql, (stmt = db.prepare(step.sql)));
+              changes.push(Number(call(stmt, 'run', step.params).changes));
+            }
+            db.exec('RELEASE cuadra_run_series');
+          } catch (err) {
+            db.exec('ROLLBACK TO cuadra_run_series');
+            db.exec('RELEASE cuadra_run_series');
+            throw err;
+          }
+          return { changes };
+        }),
       exec: (sql) => wrap(() => db.exec(sql)),
       exportBytes: () => wrap(() => new Uint8Array(db.serialize())),
       close: () => wrap(() => db.close()),

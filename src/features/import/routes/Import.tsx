@@ -283,7 +283,7 @@ export function Component() {
           ) : null}
 
           {step === 2 && preview !== null && usedMapping !== null ? (
-            <StepPreview preview={preview} mapping={usedMapping} currency={currency} include={include} onToggle={toggle} />
+            <StepPreview preview={preview} mapping={usedMapping} currency={currency} accounts={accountList} fields={fieldList} include={include} onToggle={toggle} />
           ) : null}
 
           {step === 3 && preview !== null && sum !== null ? (

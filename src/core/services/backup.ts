@@ -147,8 +147,11 @@ const MAINTENANCE_KEY = 'sys.maintenance';
  * Ajustes que pertenecen al equipo y nunca viajan en un respaldo: `sys.*` (estado interno) y `auth.*`
  * (hashes de la contraseña local). Restaurar conserva los del equipo: un respaldo no cambia la contraseña.
  */
-const LOCAL_ONLY_SQL = "key NOT LIKE 'sys.%' AND key NOT LIKE 'auth.%'";
-export const isLocalOnlySetting = (key: string): boolean => key.startsWith('sys.') || key.startsWith('auth.');
+// Ajustes que son de este equipo y no viajan en el respaldo: los del sistema, los de la sesión y la marca del
+// último respaldo comprobado (restaurar un archivo viejo no debe hacer creer que el último respaldo es ese).
+const LOCAL_ONLY_SQL = "key NOT LIKE 'sys.%' AND key NOT LIKE 'auth.%' AND key <> 'backup.lastVerifiedAt'";
+export const isLocalOnlySetting = (key: string): boolean =>
+  key.startsWith('sys.') || key.startsWith('auth.') || key === 'backup.lastVerifiedAt';
 
 // ── Checksum ─────────────────────────────────────────────────────────────────────────
 
@@ -602,8 +605,9 @@ export function createBackupService(deps: CoreDeps, options: BackupServiceOption
     const sameCounts = BACKUP_TABLES.every((t) => back.file.counts[t] === file.counts[t]);
     if (back.file.checksum !== file.checksum || !sameCounts) throw invalid('verify');
 
+    // Un respaldo cifrado no deja el nombre del cliente a la vista en el nombre del archivo.
     let base = 'cuadra';
-    if (scope.scope === 'workspace') {
+    if (scope.scope === 'workspace' && password === undefined) {
       const nameAt = col(file.tables.workspaces, 'name');
       const name = slug(String(cell(file.tables.workspaces.rows[0] ?? [], nameAt) ?? ''));
       if (name !== '') base = `cuadra-${name}`;

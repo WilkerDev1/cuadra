@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import type { AuditEntry, Currency } from '../../core';
 import { useT } from '../../i18n';
 import { AmountText } from '../../ui';
-import { entryAmount, entryTarget, textParams, type ChangeContext, changeLines } from './model';
+import { actionLabelKey, entryAmount, entryTarget, textParams, type ChangeContext, changeLines } from './model';
 
 const MAX_LINES = 4;
 
@@ -23,7 +23,7 @@ export function EntryRow({ entry, wsId, currency, accountName, ctx }: EntryRowPr
   const amount = entryAmount(entry);
   const target = entryTarget(entry, wsId);
   const lines = changeLines(entry, ctx);
-  const actionLabel = t(`action.${entry.action}`);
+  const actionLabel = t(actionLabelKey(entry));
 
   const message = tAll(entry.message, textParams(entry.params));
   // Un mensaje sin texto no debe enseñar la clave: se cae al nombre de la acción.

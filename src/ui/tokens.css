@@ -13,12 +13,12 @@
   --surface-2:     oklch(0.950 0.016 140);  /* filas alternas, chips en reposo, teclas */
   --sunken:        oklch(0.930 0.020 140);  /* campos, pistas, fondo de vista previa */
   --rule:          oklch(0.880 0.025 145);  /* renglones y separadores (decorativo) */
-  --rule-strong:   oklch(0.700 0.040 150);  /* doble raya, ejes */
-  --control:       oklch(0.620 0.035 150);  /* borde de input/checkbox: ≥3:1 */
+  --rule-strong:   oklch(0.640 0.040 150);  /* doble raya, ejes: ≥3:1 */
+  --control:       oklch(0.600 0.035 150);  /* borde de input/checkbox: ≥3:1 incluso sobre --sunken */
 
   --ink:           oklch(0.240 0.045 155);  /* texto principal 15:1 */
   --ink-2:         oklch(0.420 0.035 155);  /* texto secundario 7.7:1 */
-  --ink-3:         oklch(0.520 0.030 155);  /* meta ≥4.7:1, nunca bajo 13px */
+  --ink-3:         oklch(0.500 0.030 155);  /* meta ≥4.5:1 sobre todos los fondos, nunca bajo 13px */
 
   --forest:        oklch(0.310 0.070 155);  /* tarjeta de saldo, barra lateral */
   --forest-2:      oklch(0.370 0.075 155);  /* hover/activo sobre forest */
@@ -154,7 +154,7 @@
   --surface-2:   oklch(0.260 0.035 155);
   --sunken:      oklch(0.155 0.020 155);
   --rule:        oklch(0.320 0.035 155);
-  --rule-strong: oklch(0.480 0.040 155);
+  --rule-strong: oklch(0.520 0.040 155);
   --control:     oklch(0.520 0.040 155);
   --ink:         oklch(0.950 0.015 130);
   --ink-2:       oklch(0.780 0.025 140);
@@ -191,7 +191,7 @@
     --surface-2:   oklch(0.260 0.035 155);
     --sunken:      oklch(0.155 0.020 155);
     --rule:        oklch(0.320 0.035 155);
-    --rule-strong: oklch(0.480 0.040 155);
+    --rule-strong: oklch(0.520 0.040 155);
     --control:     oklch(0.520 0.040 155);
     --ink:         oklch(0.950 0.015 130);
     --ink-2:       oklch(0.780 0.025 140);
@@ -258,7 +258,7 @@
   --key-gap: var(--s-2);           /* separación entre teclas: 8px */
   --icon-row: 1.25rem;  --icon-nav: 1.5rem;  --icon-tip: 1rem;  /* 20/24/16px (§7) */
   --spinner: 1rem;                 /* 16px (§9 Button cargando) */
-  --hl-h: 0.18em;  --hl-drop: 0.08em;   /* resaltador (§11.2) */
+  --hl-h: 0.18em;  --hl-drop: 0.14em;   /* resaltador (§11.2): grosor y distancia bajo la línea base */
   --stamp-stroke: 3px;             /* sello de cuadre (§11.1) */
   --select-bar: 3px;               /* indicador del tipo en Segmented / barra lateral */
   --press-scale: .97;  --press-scale-key: .94;

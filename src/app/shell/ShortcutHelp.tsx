@@ -4,6 +4,7 @@ import { Sheet } from '../../ui';
 import { useNav, useQuickActions } from '../registry/hooks';
 import { useUiStore } from '../state/uiStore';
 import { buildShortcutHelp } from './shortcuts';
+import { SingleKeySwitch } from './SingleKeySwitch';
 
 /** Hoja de atajos de teclado («?»). Las filas salen del registro, así que siempre dicen lo que de verdad hay. */
 export function ShortcutHelp() {
@@ -19,6 +20,7 @@ export function ShortcutHelp() {
   });
   return (
     <Sheet open={open} onClose={() => close('help')} title={t('common.shortcuts.title')} variant="auto" height="tall">
+      <SingleKeySwitch className="shortcut-list__toggle" />
       <dl className="shortcut-list">
         {rows.map((row) => (
           <div key={row.keys.join('+') + row.labelKey} className="shortcut-list__row">

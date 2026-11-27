@@ -13,7 +13,7 @@ export interface ToastItem {
   tone?: 'info' | 'undo' | 'warn';
   /** Acción del toast; en `undo` su etiqueta por defecto es «Deshacer». */
   action?: { label?: string; onAction: () => void };
-  /** Milisegundos visibles; 6000 por defecto. Se pausa con el puntero o el foco dentro. */
+  /** Milisegundos visibles; 6000 por defecto (12000 con acción). Se pausa con el puntero o el foco dentro. */
   duration?: number;
 }
 
@@ -25,6 +25,13 @@ export interface ToastRegionProps {
 }
 
 const DEFAULT_MS = 6000;
+/** Un aviso con acción (Deshacer) dura más: con teclado llegar a él cuesta muchas pulsaciones. */
+const ACTION_MS = 12000;
+
+function isEditable(el: Element | null): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  return el.isContentEditable || el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && !['button', 'checkbox', 'radio', 'submit', 'reset'].includes(el.type));
+}
 
 function announce(text: string, region: HTMLElement | null) {
   const doc = document as Document & { ariaNotify?: (s: string) => void };
@@ -41,7 +48,7 @@ function ToastView({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: num
   const t = useT();
   const ref = useRef<HTMLLIElement>(null);
   const [paused, setPaused] = useState(false);
-  const remaining = useRef(toast.duration ?? DEFAULT_MS);
+  const remaining = useRef(toast.duration ?? (toast.action === undefined ? DEFAULT_MS : ACTION_MS));
   useEffect(() => {
     if (paused) return;
     const started = Date.now();
@@ -78,6 +85,7 @@ function ToastView({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: num
         <button
           type="button"
           className="ui-toast__action"
+          aria-keyshortcuts={tone === 'undo' ? 'Control+Z Meta+Z' : undefined}
           onClick={() => {
             toast.action?.onAction();
             dismiss();
@@ -111,6 +119,23 @@ export function ToastRegion({ toasts, onDismiss, max = 3 }: ToastRegionProps) {
       /* sin popover: queda en el flujo como región fija */
     }
   }, [visible.length]);
+  // Ctrl/Cmd+Z ejecuta la acción del aviso más reciente (salvo al escribir en un campo, donde es deshacer de texto).
+  const latest = useRef<ToastItem | undefined>(undefined);
+  latest.current = [...visible].reverse().find((x) => x.action !== undefined && (x.tone ?? 'undo') === 'undo');
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== 'z' || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.defaultPrevented) return;
+      const toast = latest.current;
+      if (toast?.action === undefined || isEditable(document.activeElement)) return;
+      e.preventDefault();
+      toast.action.onAction();
+      dismissRef.current(toast.id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   useEffect(() => {
     for (const toast of visible) {
       if (announced.current.has(toast.id)) continue;

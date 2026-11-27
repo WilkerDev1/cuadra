@@ -219,6 +219,23 @@
 .ins-table .ui-table td:first-child { position: static; }
 .ins-total-label { font-weight: var(--w-strong); }
 .ins-change { color: var(--ink-2); font-variant-numeric: var(--num); }
+.ins-table__more {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-4);
+  padding: var(--s-3) var(--s-4); border-block-start: var(--bw) solid var(--rule);
+}
+.ins-table__more .ins-meta { margin: 0; }
+/* Compacto: la tabla es la alternativa plegada a la gráfica («Ver como tabla»). */
+.ins-tabledetails__summary {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
+  min-block-size: var(--target); padding-inline: var(--s-4);
+  font-size: var(--t-small); font-weight: var(--w-medium); cursor: pointer; list-style: none;
+}
+.ins-tabledetails__summary::-webkit-details-marker { display: none; }
+.ins-tabledetails__icon { inline-size: 1rem; block-size: 1rem; color: var(--ink-3); transition: rotate 160ms var(--ease-out); }
+.ins-tabledetails[open] .ins-tabledetails__icon { rotate: 180deg; }
+.ins-tabledetails[open] .ins-tabledetails__summary { border-block-end: var(--bw) solid var(--rule); }
+@media (prefers-reduced-motion: reduce) { .ins-tabledetails__icon { transition: none; } }
+.ins-edit { display: grid; gap: var(--s-4); }
 .ins-rule-double { display: inline-block; padding-block-end: 3px; border-block-end: var(--bw) solid var(--rule-strong); box-shadow: 0 1px 0 var(--surface), 0 3px 0 var(--rule-strong); }
 
 /* ---------- Filtros (hoja) ---------- */
@@ -227,6 +244,7 @@
 .ins-filters__group legend { padding: 0; margin-block-end: var(--s-2); font-size: var(--t-small); font-weight: var(--w-medium); }
 .ins-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .ins-sheet-actions { display: flex; justify-content: space-between; gap: var(--s-2); inline-size: 100%; }
+.ins-sheet-actions--end { justify-content: flex-end; }
 
 /* En compacto el CSV vive en el menú ⋯; en ancho, botón propio */
 @container ins (width < 40rem) { .ins-csv-btn { display: none; } }

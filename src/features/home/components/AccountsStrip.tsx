@@ -29,6 +29,7 @@ export function AccountsStrip({ accounts, series, currency, hrefFor }: AccountsS
             <li key={a.id}>
               <AccountChip
                 variant="card"
+                className="home-strip__card"
                 name={a.name}
                 accountType={a.type}
                 balanceMinor={a.balanceMinor}

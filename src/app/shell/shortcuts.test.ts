@@ -112,3 +112,24 @@ describe('buildShortcutHelp', () => {
     expect(rows.at(-1)).toEqual({ keys: ['?'], labelKey: 'common.shortcuts.help' });
   });
 });
+
+describe('atajos de una tecla desactivados (WCAG 2.1.4)', () => {
+  const off: ShortcutContext = { ...ctx, singleKey: false };
+  const pressOff = (input: KeyInput, state = INITIAL_SHORTCUT_STATE, now = 1000) => resolveShortcut(input, off, state, now);
+  it('no reacciona a letras, «/», «?» ni «g» + letra', () => {
+    for (const k of ['n', 's', 'e', 't', '/', '?', 'g', 'S']) {
+      const r = pressOff(key(k));
+      expect(r.action).toBeNull();
+      expect(r.consumed).toBe(false);
+    }
+    const g = pressOff(key('g'));
+    expect(pressOff(key('i'), g.state, 1200).action).toBeNull();
+  });
+  it('Ctrl/⌘+K sigue abriendo la paleta', () => {
+    expect(pressOff(key('k', { ctrlKey: true })).action).toEqual({ type: 'palette' });
+    expect(pressOff(key('k', { metaKey: true })).action).toEqual({ type: 'palette' });
+  });
+  it('por defecto siguen activos', () => {
+    expect(press(key('s')).action?.type).toBe('quick');
+  });
+});

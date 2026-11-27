@@ -29,7 +29,10 @@ export interface FlowMonth {
 /** Paso «bonito» (1, 2, 2.5 o 5 por potencia de 10) para que `span` quepa en `maxSteps` divisiones como mucho. */
 export function niceStep(span: number, maxSteps = 4): number {
   if (span <= 0 || maxSteps <= 0) return 1;
-  return niceCeil(span / maxSteps);
+  // Los valores son unidad menor: un paso fraccionario (0.2, 2.5) no es un monto y Money no lo formatea.
+  const step = niceCeil(span / maxSteps);
+  if (Number.isInteger(step)) return step;
+  return step < 1 ? 1 : 5; // solo queda 2.5 (base 1): el siguiente paso bonito entero
 }
 
 /** Divisiones de un eje: de `lo` a `hi` cada `step` (enteros, en la unidad de los valores). */

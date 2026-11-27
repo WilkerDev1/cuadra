@@ -156,6 +156,43 @@ describe('queries: listados y filtros', () => {
     expect(voided.totals.count).toBe(1);
   });
 
+  it('las páginas siguientes (con cursor) reutilizan los totales de la primera si nada cambió', async () => {
+    const { q, ws, caja, fx, h: th } = await seedBase();
+    const aggregates: string[] = [];
+    const get = th.driver.get.bind(th.driver);
+    th.driver.get = (async (sql: string, params?: never) => {
+      if (sql.includes('ws_exists')) aggregates.push(sql);
+      return get(sql, params);
+    }) as typeof th.driver.get;
+
+    const first = await q.listTransactions(ws, { filter: { status: 'all' }, limit: 3 });
+    expect(aggregates).toHaveLength(1);
+    let cursor = first.nextCursor;
+    let pages = 1;
+    while (cursor !== null) {
+      const page = await q.listTransactions(ws, { filter: { status: 'all' }, limit: 3, cursor });
+      expect(page.totals).toEqual(first.totals);
+      cursor = page.nextCursor;
+      pages++;
+    }
+    expect(pages).toBeGreaterThan(2);
+    expect(aggregates).toHaveLength(1);
+
+    // Un cambio en la base entre páginas invalida lo guardado: la página siguiente trae totales al día.
+    const again = await q.listTransactions(ws, { filter: { status: 'all' }, limit: 3 });
+    expect(aggregates).toHaveLength(2);
+    await fx.income(caja, 7000, '2026-06-12', 'Venta tarde');
+    const next = await q.listTransactions(ws, { filter: { status: 'all' }, limit: 3, cursor: again.nextCursor! });
+    expect(aggregates).toHaveLength(3);
+    expect(next.totals.inMinor).toBe(again.totals.inMinor + 7000);
+    // Otro filtro con cursor no hereda los totales del anterior.
+    const exp = await q.listTransactions(ws, { filter: { kinds: ['expense'] }, limit: 1 });
+    const inc = await q.listTransactions(ws, { filter: { kinds: ['income'] }, limit: 1, cursor: exp.nextCursor! });
+    expect(aggregates).toHaveLength(5);
+    expect(inc.totals.outMinor).toBe(0);
+    expect(inc.totals.inMinor).toBe(next.totals.inMinor);
+  });
+
   it('búsqueda de texto ignora mayúsculas y tildes ("cafe" encuentra "Café")', async () => {
     const { q, ws } = await seedBase();
     const found = await q.listTransactions(ws, { filter: { text: 'cafe' }, sort: { by: 'date', dir: 'asc' } });
@@ -694,6 +731,34 @@ describe('queries: inicio y panel', () => {
     expect(all.breakdown.groups.every((g) => g.previous === null)).toBe(true);
   });
 
+  it('dashboard: serie diaria del periodo (entradas, salidas y saldo al cierre) y posibles duplicados', async () => {
+    const { q, ws, fx, caja, banco } = await seedBase();
+    const d = await q.dashboard(ws, { period: { preset: 'this_month' } });
+    // Junio de 2026 hasta hoy (15): un punto por día, sin futuro.
+    expect(d.daily.map((x) => x.date)).toEqual(Array.from({ length: 15 }, (_, i) => `2026-06-${String(i + 1).padStart(2, '0')}`));
+    expect(d.daily.reduce((s, x) => s + x.inMinor, 0)).toBe(d.period.totals.inMinor);
+    expect(d.daily.reduce((s, x) => s + x.outMinor, 0)).toBe(d.period.totals.outMinor);
+    for (const x of d.daily) expect(x.netMinor).toBe(x.inMinor - x.outMinor);
+    expect(d.daily.at(-1)?.balanceMinor).toBe(d.balance.totalMinor);
+    const before = await q.balances(ws, { asOf: '2026-05-31' });
+    expect(d.daily[0]!.balanceMinor - (d.daily[0]!.inMinor - d.daily[0]!.outMinor)).toBe(before.totalMinor);
+    // Un periodo cerrado del pasado: todos sus días.
+    const may = await q.dashboard(ws, { period: { from: '2026-05-01', to: '2026-05-31' } });
+    expect(may.daily).toHaveLength(31);
+    expect(may.daily.at(-1)?.balanceMinor).toBe(before.totalMinor);
+
+    expect(d.attention.possibleDuplicates).toEqual({ count: 0, days: 90, items: [] });
+    const a = await fx.expense(banco, 4321, '2026-06-10', 'Compra de mercancía');
+    const b = await fx.expense(banco, 4321, '2026-06-12', 'Compra de mercancia');
+    await fx.expense(banco, 4321, '2026-06-01', 'Otra cosa distinta'); // misma cifra, otra descripción
+    await fx.expense(caja, 4321, '2026-06-11', 'Compra de mercancía'); // otra cuenta
+    await fx.income(banco, 777, '2026-06-13', 'Venta');
+    await fx.income(banco, 777, '2026-06-13', 'Venta', { voided: 'Repetido' }); // la copia ya anulada no cuenta
+    const dup = (await q.dashboard(ws)).attention.possibleDuplicates;
+    expect(dup.count).toBe(1);
+    expect(dup.items).toEqual([{ transactionId: b, duplicateOfId: a }]);
+  });
+
   it('dashboard de un espacio vacío no falla', async () => {
     h = await createTestCuadra();
     const fx: LedgerFixture = ledgerFixture(h.driver, h.ids);
@@ -705,5 +770,7 @@ describe('queries: inicio y panel', () => {
     expect(d.top).toEqual([]);
     expect(d.series.keys).toHaveLength(d.series.totalMinor.length);
     expect(d.attention.backup.overdue).toBe(false);
+    expect(d.daily).toEqual([]);
+    expect(d.attention.possibleDuplicates.count).toBe(0);
   });
 });

@@ -9,7 +9,7 @@ import { Banner, Button, EmptyState, FIELD_TYPE_ICON, LedgerList, Switch } from 
 import { Frame } from '../components/Frame';
 import { Load } from '../components/Load';
 import { NewFieldDialog } from '../components/NewFieldDialog';
-import { ReorderButtons, useAnnouncer } from '../components/Reorder';
+import { OrderToggle, ReorderButtons, useAnnouncer } from '../components/Reorder';
 import { splitActive } from '../lib/fieldRules';
 import { fullOrder, moveId, positionOf } from '../lib/reorder';
 import { useRun } from '../lib/useRun';
@@ -44,6 +44,7 @@ function FieldList({ fields, onCreate }: { fields: Field[]; onCreate: () => void
   const wsId = useWorkspaceId();
   const { run, error } = useRun();
   const [live, announce] = useAnnouncer();
+  const [ordering, setOrdering] = useState(false);
   const { active, inactive } = splitActive(fields);
   const activeIds = active.map((f) => f.id);
 
@@ -82,8 +83,8 @@ function FieldList({ fields, onCreate }: { fields: Field[]; onCreate: () => void
       <div key={field.id} role="listitem" className="set-row" data-muted={field.active ? undefined : ''}>
         <Icon aria-hidden="true" className="set-row__icon" />
         <Link className="set-row__text set-row__link" to={`/e/${wsId}/ajustes/campos/${field.id}`} viewTransition>
-          <span className="set-row__title truncate">{field.label}</span>
-          <span className="set-row__meta truncate">{meta.join(' · ')}</span>
+          <span className="set-row__title">{field.label}</span>
+          <span className="set-row__meta">{meta.join(' · ')}</span>
         </Link>
         {field.active ? (
           <ReorderButtons name={field.label} canUp={index > 0} canDown={index < listLength - 1} onMove={(d) => void move(field, d)} />
@@ -99,9 +100,10 @@ function FieldList({ fields, onCreate }: { fields: Field[]; onCreate: () => void
   };
 
   return (
-    <div className="set-stack">
+    <div className="set-stack set-orderable" data-ordering={ordering ? '' : undefined}>
       {error === null ? null : <Banner tone="warn">{error}</Banner>}
       {live}
+      {active.length > 1 ? <OrderToggle ordering={ordering} onToggle={() => setOrdering((o) => !o)} /> : null}
       {active.length === 0 ? null : <LedgerList label={t('sec.fields')}>{active.map((f, i) => row(f, i, active.length))}</LedgerList>}
       {inactive.length === 0 ? null : (
         <section className="set-sec" aria-labelledby="set-fld-off">

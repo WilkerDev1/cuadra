@@ -1,14 +1,30 @@
+import { CircleAlert } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import type { ColumnMapping, ImportPreviewResult, ImportPreviewRow, Currency } from '../../../core';
+import type { Account, ColumnMapping, Currency, Field, ImportPreviewResult, ImportPreviewRow } from '../../../core';
 import { useT } from '../../../i18n';
 import { formatDate, getLocale } from '../../../i18n/format';
-import { AmountText, Banner, Button, InfoTip, Segmented, Table } from '../../../ui';
-import { canInclude, filterRows, flaggedColumns, rowDisplay, summarize, visibleIssues, type CellColumn, type PreviewFilter } from '../logic';
+import { AmountText, Banner, Button, InfoTip, Segmented, Table, type TableColumn } from '../../../ui';
+import {
+  canInclude,
+  extraCell,
+  extraColumns,
+  filterRows,
+  flaggedColumns,
+  rawAmount,
+  rowDisplay,
+  summarize,
+  visibleIssues,
+  type CellColumn,
+  type ExtraCell,
+  type PreviewFilter,
+} from '../logic';
 
 export interface StepPreviewProps {
   preview: ImportPreviewResult;
   mapping: ColumnMapping;
   currency: Currency;
+  accounts: readonly Account[];
+  fields: readonly Field[];
   include: ReadonlySet<number>;
   onToggle: (index: number, on: boolean) => void;
 }
@@ -17,7 +33,7 @@ const PAGE = 20;
 const MORE = 50;
 
 /** Paso 3 · qué se va a importar: resumen, totales, opciones nuevas y las filas con sus problemas. */
-export function StepPreview({ preview, mapping, currency, include, onToggle }: StepPreviewProps) {
+export function StepPreview({ preview, mapping, currency, accounts, fields, include, onToggle }: StepPreviewProps) {
   const t = useT();
   const [filter, setFilter] = useState<PreviewFilter>('all');
   const [shown, setShown] = useState(PAGE);
@@ -25,6 +41,8 @@ export function StepPreview({ preview, mapping, currency, include, onToggle }: S
   const rows = filterRows(preview.rows, filter, include);
   const visible = rows.slice(0, shown);
   const fmtDate = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? formatDate(iso, getLocale()) : iso);
+  const display = (r: ImportPreviewRow) => rowDisplay(r, mapping, preview.resolved.dateFormat);
+  const extras = extraColumns(mapping, fields);
 
   const issueLabel = (code: string) => {
     const key = `import.issue.${code}`;
@@ -32,16 +50,58 @@ export function StepPreview({ preview, mapping, currency, include, onToggle }: S
     return text === key || text.startsWith('⟦') ? t('import.issue.other') : text;
   };
 
-  const flag = (row: ImportPreviewRow, column: CellColumn, text: string, content: ReactNode) => {
+  /** Resalta la celda del problema; el tooltip dice qué pasa y lo que traía el archivo («Fecha no reconocida: 31/02/2026»). */
+  const flag = (row: ImportPreviewRow, column: CellColumn, original: string, content: ReactNode) => {
     const flagged = flaggedColumns(row).has(column) && (row.status === 'error' || row.status === 'warning');
     if (!flagged) return content;
-    const why = visibleIssues(row).map(issueLabel).join(' · ');
+    const why = visibleIssues(row)
+      .filter((i) => flaggedColumns({ ...row, issues: [i] }).has(column))
+      .map(issueLabel)
+      .join(' · ');
     return (
-      <span className="imp-cell imp-cell--warn" title={`${text}: ${why}`}>
+      <span className="imp-cell imp-cell--warn" title={original.trim() === '' ? why : `${why}: ${original}`}>
         {content === '' || content === null ? '—' : content}
       </span>
     );
   };
+
+  /** Monto de una fila que no se pudo leer: el texto del archivo, apagado, en la columna que le toca. */
+  const rawAmountCell = (r: ImportPreviewRow, side: 'in' | 'out') => {
+    const amount = rawAmount(r, mapping);
+    if (amount === null) return side === 'in' ? flag(r, 'amount', '', null) : null;
+    if (amount.side !== side) return null;
+    return flag(r, 'amount', amount.text, <span className="imp-raw num">{amount.text}</span>);
+  };
+
+  const extraContent = (c: ExtraCell): ReactNode => {
+    switch (c.kind) {
+      case 'empty':
+        return null;
+      case 'date':
+        return fmtDate(c.iso);
+      case 'bool':
+        return t(c.value ? 'import.prev.yes' : 'import.prev.no');
+      case 'new':
+        return (
+          <span className="imp-newval">
+            {c.text} <span className="imp-newtag">{t('import.prev.newTag')}</span>
+          </span>
+        );
+      case 'raw':
+        return <span className="imp-raw">{c.text}</span>;
+      default:
+        return c.text;
+    }
+  };
+
+  const extraTableColumns: Array<TableColumn<ImportPreviewRow>> = extras.map((col) => ({
+    key: col.key,
+    header: col.kind === 'account' ? t('import.prev.col.account') : col.field.label,
+    render: (r) => {
+      const content = extraContent(extraCell(r, col, accounts));
+      return col.kind === 'account' ? flag(r, 'account', r.raw[col.column] ?? '', content) : content;
+    },
+  }));
 
   const statusText = (row: ImportPreviewRow): string => {
     if (row.status === 'duplicate' && row.duplicateOf !== null) {
@@ -151,14 +211,18 @@ export function StepPreview({ preview, mapping, currency, include, onToggle }: S
             key: 'date',
             header: t('import.prev.col.date'),
             width: '8rem',
-            render: (r) => flag(r, 'date', t('import.prev.col.date'), fmtDate(rowDisplay(r, mapping).date)),
+            render: (r) => {
+              const d = display(r);
+              return <span className="imp-date">{flag(r, 'date', d.dateRaw, fmtDate(d.date))}</span>;
+            },
           },
           {
             key: 'desc',
             header: t('import.prev.col.desc'),
             grow: true,
-            render: (r) => flag(r, 'description', t('import.prev.col.desc'), rowDisplay(r, mapping).description),
+            render: (r) => flag(r, 'description', '', display(r).description),
           },
+          ...extraTableColumns,
           {
             key: 'in',
             header: t('import.prev.col.in'),
@@ -166,9 +230,9 @@ export function StepPreview({ preview, mapping, currency, include, onToggle }: S
             render: (r) =>
               r.draft !== null && r.draft.kind === 'income' ? (
                 <AmountText minor={r.draft.amountMinor} kind="income" notation="columns" size="table" symbol={false} currency={currency} />
-              ) : (
-                flag(r, 'amount', t('import.prev.col.in'), null)
-              ),
+              ) : r.draft === null ? (
+                rawAmountCell(r, 'in')
+              ) : null,
           },
           {
             key: 'out',
@@ -177,12 +241,19 @@ export function StepPreview({ preview, mapping, currency, include, onToggle }: S
             render: (r) =>
               r.draft !== null && r.draft.kind === 'expense' ? (
                 <AmountText minor={r.draft.amountMinor} kind="expense" notation="columns" size="table" symbol={false} currency={currency} />
+              ) : r.draft === null ? (
+                rawAmountCell(r, 'out')
               ) : null,
           },
           {
             key: 'status',
             header: t('import.prev.col.status'),
-            render: (r) => <span className={`imp-status imp-status--${r.status}`}>{statusText(r)}</span>,
+            render: (r) => (
+              <span className={`imp-status imp-status--${r.status}`}>
+                {r.status === 'error' || r.status === 'warning' ? <CircleAlert aria-hidden="true" /> : null}
+                <span>{statusText(r)}</span>
+              </span>
+            ),
           },
         ]}
       />

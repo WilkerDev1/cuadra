@@ -29,6 +29,17 @@ export function remaining(control: Minor | null, sum: Minor): Minor | null {
   return control === null ? null : control - sum;
 }
 
+/**
+ * Qué hacer al guardar un lote según su total de control (I-14: nada se escribe con el control descuadrado o
+ * ilegible sin que el usuario lo vea). `block`: el control está escrito pero no se entiende, se corrige antes.
+ * `confirm`: no cuadra (o hay filas con error), se pide confirmación. `save`: sin control o cuadra.
+ */
+export function controlGate(control: { status: 'empty' | 'ok' | 'invalid' }, diff: Minor | null, errorRows = 0): 'block' | 'confirm' | 'save' {
+  if (control.status === 'invalid') return 'block';
+  if (errorRows > 0 || (diff !== null && diff !== 0)) return 'confirm';
+  return 'save';
+}
+
 /** Las últimas `n` líneas, la más reciente arriba, con su índice real. */
 export function tail(lines: readonly BurstLine[], n = 3): Array<{ line: BurstLine; index: number }> {
   return lines

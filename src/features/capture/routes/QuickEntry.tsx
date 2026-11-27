@@ -10,7 +10,7 @@ import { useCuadraQuery } from '../../../app/data/useCuadraQuery';
 import type { Transaction } from '../../../core';
 import { EntryForm } from '../components/EntryForm';
 import { OpeningForm } from '../components/OpeningForm';
-import { LoadError, Loading, NoAccounts, VoidedNotice } from '../components/States';
+import { LoadError, Loading, NoAccounts, OtherWorkspace, VoidedNotice } from '../components/States';
 import { TransferForm } from '../components/TransferForm';
 import { useCurrency, useToday } from '../hooks';
 import { exprFromMinor } from '../logic/amount';
@@ -61,7 +61,7 @@ function NewEntry({ params, monto }: { params: EntryParams; monto: string | null
 function DuplicateEntry({ id }: { id: string }) {
   const ws = useWorkspaceId();
   const currency = useCurrency();
-  const accounts = useAccounts();
+  const accounts = useAccounts({ includeArchived: true });
   const dup = useCuadraQuery({
     key: ['capture.duplicate', ws, id],
     tables: ['transactions', 'transaction_field_values', 'fields', 'field_options'],
@@ -70,9 +70,11 @@ function DuplicateEntry({ id }: { id: string }) {
   if (dup.isPending || accounts.isPending) return <Loading />;
   if (dup.isError) return <LoadError error={dup.error} onRetry={() => void dup.refetch()} />;
   const d = dup.data;
+  const own = new Set((accounts.data ?? []).map((a) => a.id));
+  if (!own.has('fromAccountId' in d ? d.fromAccountId : d.accountId)) return <OtherWorkspace />;
   if ('fromAccountId' in d) return <Navigate to={`/e/${ws}/transferencia?desde=${encodeURIComponent(id)}`} replace />;
   // Si la cuenta de origen ya está archivada, se propone otra activa.
-  const accountId = pickAccount(accounts.data ?? [], [d.accountId]);
+  const accountId = pickAccount((accounts.data ?? []).filter((a) => a.archivedAt === null), [d.accountId]);
   if (accountId === null) return <NoAccounts />;
   return (
     <EntryForm
@@ -90,10 +92,12 @@ function DuplicateEntry({ id }: { id: string }) {
 }
 
 function EditEntry({ id }: { id: string }) {
+  const ws = useWorkspaceId();
   const tx = useTransaction(id);
   const accounts = useAccounts({ includeArchived: true });
   if (tx.isPending || accounts.isPending) return <Loading />;
   if (tx.isError) return <LoadError error={tx.error} onRetry={() => void tx.refetch()} />;
+  if (tx.data.workspaceId !== ws) return <OtherWorkspace />;
   return <EditBody tx={tx.data} />;
 }
 

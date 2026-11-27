@@ -181,7 +181,7 @@
     },
     {
       "key": "estado_mensual",
-      "name": "Estado del mes pasado",
+      "name": "Estado del mes anterior",
       "kind": "report",
       "pinned": true,
       "recipe": {

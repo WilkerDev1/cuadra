@@ -43,6 +43,7 @@ export function ListRow({ title, meta, trailing, trailingMeta, icon: Icon, voide
   const t = useT();
   const scroller = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  const moreBtn = useRef<HTMLButtonElement>(null);
   const [revealed, setRevealed] = useState(false);
   const hasActions = actions !== undefined && actions.length > 0;
   const label = name ?? (typeof title === 'string' ? title : '');
@@ -100,6 +101,13 @@ export function ListRow({ title, meta, trailing, trailingMeta, icon: Icon, voide
       data-voided={voided === true || undefined}
       data-muted={muted === true || undefined}
       data-selected={selected === true || undefined}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape' || !revealed) return;
+        e.stopPropagation();
+        scroller.current?.scrollTo({ left: 0 });
+        setRevealed(false);
+        moreBtn.current?.focus();
+      }}
     >
       <div
         className="ui-row"
@@ -119,6 +127,7 @@ export function ListRow({ title, meta, trailing, trailingMeta, icon: Icon, voide
         )}
         {hasActions ? (
           <button
+            ref={moreBtn}
             type="button"
             className="ui-row__more ui-iconbtn ui-iconbtn--ghost"
             aria-label={t('ui.moreActions', { name: label })}

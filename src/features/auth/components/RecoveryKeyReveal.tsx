@@ -4,6 +4,7 @@ import { useT } from '../../../i18n';
 import { formatDate } from '../../../i18n/format';
 import { Button } from '../../../ui';
 import { buildRecoveryFile, formatRecoveryKey, localIsoDate, recoveryKeyGroups } from '../logic/recoveryFile';
+import { saveTextFile } from '../../../app/data/download';
 
 export interface RecoveryKeyRevealProps {
   recoveryKey: string;
@@ -54,15 +55,9 @@ export function RecoveryKeyReveal({ recoveryKey, profileName, onDone }: Recovery
     const now = new Date();
     const iso = localIsoDate(now);
     const file = buildRecoveryFile({ recoveryKey, profileName, dateLabel: formatDate(iso), isoDate: iso, t });
-    const url = URL.createObjectURL(new Blob([file.text], { type: 'text/plain;charset=utf-8' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = file.name;
-    a.rel = 'noopener';
-    a.click();
-    // Se revoca en la siguiente vuelta: algunos navegadores leen la URL después del clic.
-    setTimeout(() => URL.revokeObjectURL(url), 0);
-    setFeedback({ key: 'auth.recovery.downloaded', tone: 'ok' });
+    void saveTextFile(file.text, file.name).then((outcome) => {
+      if (outcome === 'saved') setFeedback({ key: 'auth.recovery.downloaded', tone: 'ok' });
+    });
   };
 
   const print = () => {

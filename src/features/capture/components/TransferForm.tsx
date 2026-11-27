@@ -10,11 +10,12 @@ import { useSheet } from '../../../app/registry/sheet';
 import { addDays, type Id, type IsoDate, type Minor, type Transaction, type TransferDraft, type TxPatch } from '../../../core';
 import { formatDate } from '../../../i18n/format';
 import { t as tGlobal, useT } from '../../../i18n';
-import { ACCOUNT_ICON, AmountText, Button, Chip, DateField, Field, IconButton, InfoTip, Input, Segmented, Textarea, cx, evaluateExpression, type SegmentedOption } from '../../../ui';
+import { ACCOUNT_ICON, AmountText, Button, Chip, Field, IconButton, InfoTip, Input, Segmented, Textarea, cx, evaluateExpression, type SegmentedOption } from '../../../ui';
 import { useCurrency, useKeypadMode, useSignedAmount, useSoftWarnings, useToday } from '../hooks';
 import { choose, defaultPair, previewBalances, swap, validateTransfer, type TransferPair } from '../logic/transfer';
 import { AccountPicker } from './AccountPicker';
 import { AmountEntry } from './AmountEntry';
+import { DateGroup } from './DateGroup';
 import { SoftWarnings } from './SoftWarnings';
 
 export interface TransferInitial {
@@ -240,7 +241,7 @@ export function TransferForm({ initial, original }: TransferFormProps) {
           </div>
           {panel === 'date' ? (
             <div className="cap-panel">
-              <DateField value={date} onChange={(d) => d !== '' && setDate(d)} today={today} />
+              <DateGroup label={t('date.label')} value={date} onChange={(d) => d !== '' && setDate(d)} today={today} />
               <Button variant="secondary" onClick={() => setPanel(null)}>
                 {t('done')}
               </Button>
@@ -258,10 +259,7 @@ export function TransferForm({ initial, original }: TransferFormProps) {
       ) : (
         <>
           {noteField}
-          <div className="cap-group">
-            <span className="cap-label">{t('date.label')}</span>
-            <DateField value={date} onChange={(d) => d !== '' && setDate(d)} today={today} />
-          </div>
+          <DateGroup label={t('date.label')} value={date} onChange={(d) => d !== '' && setDate(d)} today={today} />
           <Field label={t('notes.label')}>
             <Textarea value={notes} rows={2} onChange={(e) => setNotes(e.currentTarget.value)} />
           </Field>

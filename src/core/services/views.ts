@@ -1,7 +1,8 @@
 // Vistas guardadas (ARCHITECTURE.md 3.4, 3.5): filtros, resúmenes e informes como recetas JSON versionadas.
 //
 // - La receta se guarda tal cual (forma comprobada) y se revisa contra los campos actuales al leerla: un campo
-//   desactivado sigue funcionando y avisa field_inactive; uno que ya no existe se quita y avisa field_missing;
+//   desactivado sigue funcionando y avisa field_inactive; uno que ya no existe avisa field_missing (y una opción,
+//   option_missing) sin quitar la condición del filtro, para no ensanchar la vista en silencio;
 //   una opción fusionada sigue a su destino. Así, reactivar un campo devuelve la vista a su forma original.
 // - "Borrar" una vista es ocultarla (deleted_at) y queda en el historial. Nada se borra.
 // - Cada guardado escribe como mucho una acción de historial (entity_type 'view').

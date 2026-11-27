@@ -54,19 +54,6 @@
 .ui-ladder__balance { fill: none; stroke: var(--chart-line); stroke-width: 2; stroke-linejoin: round; }
 
 /* Dona */
-.ui-donut { grid-template-columns: minmax(8rem, 11rem) 1fr; align-items: center; column-gap: var(--s-6); }
-.ui-donut .ui-chart__table { grid-column: 1 / -1; }
-.ui-donut__body { position: relative; }
-.ui-donut__svg { inline-size: 100%; block-size: auto; }
-.ui-donut__track { fill: none; stroke: var(--surface-2); stroke-width: 18; }
-.ui-donut__full { fill: none; stroke-width: 18; }
-.ui-donut__seg { stroke: var(--surface); stroke-width: 1.5; }
-.ui-donut__center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; justify-items: center; }
-.ui-donut__center .ui-amount--m { font-size: var(--t-small); }
-.ui-donut__legend { display: grid; gap: var(--s-2); margin: 0; }
-.ui-donut__legend li { display: grid; grid-template-columns: auto 1fr auto; gap: var(--s-2); align-items: center; font-size: var(--t-small); }
-.ui-donut__dot { inline-size: 0.625rem; block-size: 0.625rem; border-radius: 2px; }
-@container (width < 24rem) { .ui-donut { grid-template-columns: 1fr; justify-items: center; } .ui-donut__legend { inline-size: 100%; } .ui-donut__body { inline-size: 10rem; } }
 
 /* Línea */
 .ui-line__plot { inline-size: 100%; overflow: hidden; }

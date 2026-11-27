@@ -13,6 +13,7 @@ import {
   seedWorkspace,
 } from './movements.testkit';
 import type { TxDraft } from './transactions';
+import { MAX_DESCRIPTION_LENGTH, MAX_LABEL_LENGTH, MAX_NOTES_LENGTH } from './validation';
 
 let t: TestCuadra;
 let ws: Id;
@@ -147,5 +148,56 @@ describe('validaciones duras', () => {
     await t.cuadra.transactions.void(value.id);
     expect(await codeOf(t.cuadra.transactions.update(value.id, { amountMinor: 1 }))).toBe('already_voided');
     expect(await codeOf(t.cuadra.transactions.get('no-existe'))).toBe('not_found');
+  });
+});
+
+describe('límites de longitud de los textos', () => {
+  it('descripción hasta 200 caracteres y notas hasta 2 000: un carácter más → text_too_long, nada se escribe', async () => {
+    expect(MAX_DESCRIPTION_LENGTH).toBe(200);
+    expect(MAX_NOTES_LENGTH).toBe(2_000);
+    expect(MAX_LABEL_LENGTH).toBe(80);
+    // Se cuentan caracteres, no unidades UTF-16: 200 emojis caben.
+    await t.cuadra.transactions.create(draft({ description: '🧾'.repeat(200), notes: 'n'.repeat(2_000) }));
+    const before = await countRows(t.driver, 'transactions');
+    const long = t.cuadra.transactions.create(draft({ description: 'x'.repeat(201) }));
+    await expect(long).rejects.toMatchObject({ code: 'text_too_long', details: { reason: 'description', max: 200 } });
+    await expect(t.cuadra.transactions.create(draft({ notes: 'x'.repeat(2_001) }))).rejects.toMatchObject({ code: 'text_too_long', details: { reason: 'notes', max: 2_000 } });
+    // Los espacios de los extremos no cuentan (se recortan antes).
+    await t.cuadra.transactions.create(draft({ description: `  ${'y'.repeat(200)}  ` }));
+    expect(await countRows(t.driver, 'transactions')).toBe(before + 1);
+  });
+
+  it('editar y transferir también respetan el límite', async () => {
+    const bank = await seedAccount(t, ws, { name: 'Banco' });
+    const saved = await t.cuadra.transactions.create(draft());
+    expect(await codeOf(t.cuadra.transactions.update(saved.value.id, { description: 'z'.repeat(201) }))).toBe('text_too_long');
+    expect(await codeOf(t.cuadra.transactions.update(saved.value.id, { notes: 'z'.repeat(2_001) }))).toBe('text_too_long');
+    expect(
+      await codeOf(t.cuadra.transactions.createTransfer({ fromAccountId: cash, toAccountId: bank, amountMinor: 100, date: '2026-06-14', description: 'd'.repeat(201) })),
+    ).toBe('text_too_long');
+  });
+
+  it('captura: la fila con descripción demasiado larga sale como error de fila, las demás se guardan', async () => {
+    const r = await t.cuadra.batches.capture({
+      workspaceId: ws,
+      accountId: cash,
+      kind: 'income',
+      date: '2026-06-14',
+      label: 'Ventas',
+      rows: [
+        { amount: '10', description: 'Bien' },
+        { amount: '20', description: 'L'.repeat(201) },
+      ],
+    });
+    expect(r).toMatchObject({ status: 'saved', rowErrors: [{ index: 1, error: 'text_too_long' }] });
+  });
+
+  it('etiquetas de campos y opciones hasta 80 caracteres', async () => {
+    const ok = await t.cuadra.fields.create({ workspaceId: ws, label: 'E'.repeat(80), type: 'list' });
+    expect(await codeOf(t.cuadra.fields.create({ workspaceId: ws, label: 'E'.repeat(81), type: 'text' }))).toBe('text_too_long');
+    expect(await codeOf(t.cuadra.fields.update(ok.value.id, { label: 'F'.repeat(81) }))).toBe('text_too_long');
+    expect(await codeOf(t.cuadra.fields.addOption(ok.value.id, { label: 'O'.repeat(81) }))).toBe('text_too_long');
+    const opt = await t.cuadra.fields.addOption(ok.value.id, { label: 'O'.repeat(80) });
+    expect(await codeOf(t.cuadra.fields.updateOption(opt.value.id, { label: 'P'.repeat(81) }))).toBe('text_too_long');
   });
 });

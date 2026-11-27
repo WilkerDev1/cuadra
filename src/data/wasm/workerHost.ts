@@ -67,6 +67,10 @@ function toSqlValue(value: unknown): SqlValue {
   return value as SqlValue;
 }
 
+/** Una sola sentencia de control de transacción: no cambia datos por sí misma (lo escrito dentro ya contó). */
+const TX_CONTROL =
+  /^\s*(?:BEGIN(?:\s+(?:DEFERRED|IMMEDIATE|EXCLUSIVE))?(?:\s+TRANSACTION)?|COMMIT(?:\s+TRANSACTION)?|END(?:\s+TRANSACTION)?|ROLLBACK(?:\s+TRANSACTION)?)\s*;?\s*$/i;
+
 export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
   const persistDelayMs = options.persistDelayMs ?? 500;
   const memoryKey = options.memoryKey ?? 'db:main';
@@ -76,7 +80,8 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
   let mode: Mode | null = null;
   let store: ByteStore | null = null;
 
-  // Persistencia del modo memory-idb.
+  // Persistencia del modo memory-idb. writeCounter sube solo con lo que puede cambiar la base: una lectura
+  // dentro de una transacción (readTx: BEGIN IMMEDIATE + SELECT + COMMIT) no debe programar un volcado entero.
   let writeCounter = 0;
   let persistedCounter = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -151,6 +156,9 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
     for (const key of Object.keys(raw)) row[key] = toSqlValue(raw[key]);
     return row;
   }
+
+  /** ¿Puede cambiar la base? SELECT, BEGIN/COMMIT/SAVEPOINT… son de solo lectura para SQLite. */
+  const mayWrite = (stmt: PreparedStatement): boolean => sqlite3!.capi.sqlite3_stmt_readonly(stmt.pointer!) === 0;
 
   function runStatement(stmt: PreparedStatement, params: SqlParams | undefined): number {
     bindParams(stmt, params);
@@ -247,8 +255,14 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
           }),
         };
       case 'run':
-        writeCounter++;
-        return { result: { changes: withStatement(body.sql, (stmt) => runStatement(stmt, body.params)) } };
+        return {
+          result: {
+            changes: withStatement(body.sql, (stmt) => {
+              if (mayWrite(stmt)) writeCounter++;
+              return runStatement(stmt, body.params);
+            }),
+          },
+        };
       case 'runMany': {
         writeCounter++;
         const current = requireDb();
@@ -270,8 +284,31 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
           throw err;
         }
       }
-      case 'exec':
+      case 'runSeries': {
         writeCounter++;
+        const current = requireDb();
+        const prepared = new Map<string, PreparedStatement>();
+        current.exec('SAVEPOINT cuadra_run_series');
+        try {
+          const changes: number[] = [];
+          for (const step of body.steps) {
+            let stmt = prepared.get(step.sql);
+            if (stmt === undefined) prepared.set(step.sql, (stmt = current.prepare(step.sql)));
+            else stmt.reset(true);
+            changes.push(runStatement(stmt, step.params));
+          }
+          current.exec('RELEASE cuadra_run_series');
+          return { result: { changes } };
+        } catch (err) {
+          current.exec('ROLLBACK TO cuadra_run_series');
+          current.exec('RELEASE cuadra_run_series');
+          throw err;
+        } finally {
+          for (const stmt of prepared.values()) stmt.finalize();
+        }
+      }
+      case 'exec':
+        if (!TX_CONTROL.test(body.sql)) writeCounter++;
         requireDb().exec(body.sql);
         return { result: undefined };
       case 'export': {
@@ -306,7 +343,7 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
     } catch (err) {
       options.post({ id, ok: false, error: serializeError(err) });
     } finally {
-      if (db && (body.op === 'run' || body.op === 'runMany' || body.op === 'exec')) schedulePersist();
+      if (db && (body.op === 'run' || body.op === 'runMany' || body.op === 'runSeries' || body.op === 'exec')) schedulePersist();
     }
   }
 

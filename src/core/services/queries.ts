@@ -27,7 +27,7 @@ import {
 import { DomainError } from '../errors';
 import type { Clock, SqlExecutor, SqlValue } from '../ports';
 import { describeFilter, isFiltered, parseViewRecipe, resolvePeriod, validateRecipe } from '../recipes';
-import { compileFilter } from '../sql/filter';
+import { compileFilter, type CompiledFilter } from '../sql/filter';
 import {
   COLUMNS,
   toAccount,
@@ -73,6 +73,12 @@ import type {
 } from '../types';
 import type { CoreDeps } from '../uow';
 import { readTx } from '../uow';
+import { DUPLICATE_WINDOW_DAYS, similarDescriptions } from './validation';
+
+/** Días hacia atrás en que el panel busca posibles duplicados. */
+export const DASHBOARD_DUPLICATE_DAYS = 90;
+/** Máximo de puntos de la serie diaria del panel. */
+export const DASHBOARD_DAILY_MAX = 1_100;
 
 export type { Page, SummaryGroup, SummaryResult, Totals } from '../types';
 
@@ -143,6 +149,12 @@ export interface DashboardData {
   flow: Array<{ key: string; label: string; inMinor: Minor; outMinor: Minor; netMinor: Minor; count: number }>;
   /** Saldo al cierre de cada paso. `byAccount` incluye todas las cuentas (también archivadas). */
   series: { unit: 'day' | 'week' | 'month'; keys: string[]; totalMinor: Minor[]; byAccount: Record<Id, Minor[]> };
+  /**
+   * Un punto por día del periodo (sin pasar de hoy ni del ancla de las series): entradas y salidas del día y
+   * saldo total del espacio al cierre. Vacío si el espacio no tiene movimientos; como mucho 1 100 días (los
+   * últimos), así "todo" no crece sin límite.
+   */
+  daily: Array<{ date: IsoDate; inMinor: Minor; outMinor: Minor; netMinor: Minor; balanceMinor: Minor }>;
   /** Cuentas no archivadas con su saldo, en orden manual. */
   accounts: AccountWithBalance[];
   breakdown: {
@@ -160,6 +172,12 @@ export interface DashboardData {
   attention: {
     negativeAccounts: AccountWithBalance[];
     unbalancedBatches: Array<{ batch: Batch; sumMinor: Minor; differenceMinor: Minor }>;
+    /**
+     * Posibles duplicados de los últimos `days` días (misma regla que el aviso possible_duplicate: misma
+     * cuenta, sentido y monto, a ≤ 3 días y descripción parecida; solo entradas y salidas activas). `items`:
+     * la copia (la más reciente) y el original, como mucho 20, de lo más nuevo a lo más viejo.
+     */
+    possibleDuplicates: { count: number; days: number; items: Array<{ transactionId: Id; duplicateOfId: Id }> };
     backup: { lastVerifiedAt: Timestamp | null; daysSince: number | null; reminderDays: number; overdue: boolean };
   };
   recent: TransactionRow[];
@@ -349,10 +367,11 @@ export async function loadContext(
   }
   if (opts.unbalanced) {
     extra.push(
-      `(SELECT json_group_array(json_array(${jsonObject(COLUMNS.batches, 'y')}, y.s, y.ac, y.vc)) FROM (
+      `(SELECT json_group_array(json_array(${jsonObject(COLUMNS.batches, 'y')}, y.s, y.ac, y.vc, y.rc)) FROM (
          SELECT b.*, COALESCE(SUM(CASE WHEN t.status = 'active' THEN t.amount_minor END), 0) AS s,
                 SUM(CASE WHEN t.status = 'active' THEN 1 ELSE 0 END) AS ac,
-                SUM(CASE WHEN t.status = 'voided' THEN 1 ELSE 0 END) AS vc
+                SUM(CASE WHEN t.status = 'voided' THEN 1 ELSE 0 END) AS vc,
+                SUM(CASE WHEN t.status = 'voided' AND t.voided_with_batch = 1 THEN 1 ELSE 0 END) AS rc
          FROM batches b JOIN transactions t ON t.batch_id = b.id
          WHERE b.workspace_id = w.id AND b.control_total_minor IS NOT NULL
          GROUP BY b.id
@@ -380,9 +399,9 @@ export async function loadContext(
   const fields = parse<FieldRecord[]>(row['fields_json'], [])
     .map((f) => toField(f, options))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, 'es'));
-  const unbalanced = parse<Array<[BatchRecord, number, number, number]>>(row['unbalanced_json'], []).map(
-    ([b, s, ac, vc]) => {
-      const batch = toBatch({ ...b, active_count: ac, voided_count: vc });
+  const unbalanced = parse<Array<[BatchRecord, number, number, number, number]>>(row['unbalanced_json'], []).map(
+    ([b, s, ac, vc, rc]) => {
+      const batch = toBatch({ ...b, active_count: ac, voided_count: vc, restorable_count: rc });
       const sumMinor = minorOf(s);
       return { batch, sumMinor, differenceMinor: minorOf(sumMinor - (batch.controlTotalMinor ?? 0)) };
     },
@@ -1112,6 +1131,22 @@ function statsFromCube(cube: readonly CubeCell[], openings: ReadonlyMap<Id, Id>)
 export function createQueriesService(deps: CoreDeps): QueriesService {
   const { driver, clock } = deps;
 
+  // Totales del filtro completo para listTransactions. La primera página siempre los calcula; las siguientes
+  // (con cursor: scroll infinito, exportar «Todo» en páginas de 500) reutilizan los de la primera si el filtro
+  // resuelto es el mismo y la base no ha cambiado (`total_changes()` de la única conexión: ADR-9). Así no se
+  // repite en cada página un agregado sobre todo el filtro que, con el driver en serie, frena lo demás.
+  let totalsMemo: { key: string; changes: number; totals: Totals } | null = null;
+  async function pageTotals(workspaceId: Id, filter: TxFilter, compiled: CompiledFilter, continuation: boolean): Promise<Totals> {
+    const key = JSON.stringify([workspaceId, filter.status ?? 'active', compiled.where, compiled.params]);
+    const changes = intOf((await driver.get('SELECT total_changes() AS n'))?.['n']);
+    if (continuation && totalsMemo !== null && totalsMemo.key === key && totalsMemo.changes === changes) {
+      return { ...totalsMemo.totals };
+    }
+    const totals = await queryTotals(driver, workspaceId, filter, clock);
+    totalsMemo = { key, changes, totals: { ...totals } };
+    return totals;
+  }
+
   async function listTransactions(
     workspaceId: Id,
     input: { filter: TxFilter; sort?: TxSort; limit?: number; cursor?: string },
@@ -1123,8 +1158,8 @@ export function createQueriesService(deps: CoreDeps): QueriesService {
     const order = orderFor(sort, single !== null);
     const sig = `${sort.by}:${sort.dir}:${single !== null ? 1 : 0}`;
     const after = decodeCursor(input.cursor, sig, order.columns.length);
-    const totals = await queryTotals(driver, workspaceId, filter, clock);
     const compiled = compileFilter(filter, { workspaceId, clock });
+    const totals = await pageTotals(workspaceId, filter, compiled, after !== null);
     const rows = await selectRows(driver, {
       ...compiled,
       order,
@@ -1549,6 +1584,68 @@ export function createQueriesService(deps: CoreDeps): QueriesService {
               limit: recentLimit,
             });
 
+      // 5 · Posibles duplicados recientes (candidatos por SQL, descripción parecida en JS como en check()).
+      const dupSince = addDays(today, -(DASHBOARD_DUPLICATE_DAYS - 1));
+      // Primero la ventana (una pasada por tx_ws_status) y, de ella, solo las filas cuyo monto se repite en la
+      // misma cuenta, sentido y tipo; el cruce por fechas se hace sobre esas pocas. Mismo resultado que cruzar
+      // cada movimiento con su cuenta, unas 4 veces más rápido con 20 000 movimientos.
+      const dupRows = await tx.all<{ x: string; y: string; dx: string; dy: string }>(
+        `WITH w AS MATERIALIZED (
+             SELECT id, account_id, direction, kind, amount_minor, date, seq, description FROM transactions
+              WHERE workspace_id = :ws AND status = 'active' AND kind IN ('income', 'expense')
+                AND date BETWEEN date(:since, '-${DUPLICATE_WINDOW_DAYS} days') AND :today),
+           k AS (SELECT account_id, direction, kind, amount_minor FROM w
+                  GROUP BY account_id, direction, kind, amount_minor HAVING COUNT(*) > 1),
+           c AS MATERIALIZED (SELECT w.* FROM w JOIN k ON k.account_id = w.account_id AND k.direction = w.direction
+                  AND k.kind = w.kind AND k.amount_minor = w.amount_minor)
+         SELECT x.id AS x, y.id AS y, x.description AS dx, y.description AS dy
+           FROM c y JOIN c x
+             ON x.account_id = y.account_id AND x.direction = y.direction AND x.amount_minor = y.amount_minor
+            AND x.kind = y.kind
+            AND x.date BETWEEN date(y.date, '-${DUPLICATE_WINDOW_DAYS} days') AND y.date
+            AND (x.date < y.date OR x.seq < y.seq)
+          WHERE y.date BETWEEN :since AND :today
+          ORDER BY y.date DESC, y.seq DESC, x.date DESC, x.seq DESC`,
+        { ws: workspaceId, since: dupSince, today },
+      );
+      const dupItems: Array<{ transactionId: Id; duplicateOfId: Id }> = [];
+      const dupSeen = new Set<Id>();
+      for (const r of dupRows) {
+        if (dupSeen.has(r.y) || !similarDescriptions(r.dx, r.dy)) continue;
+        dupSeen.add(r.y);
+        dupItems.push({ transactionId: r.y, duplicateOfId: r.x });
+      }
+
+      // 6 · Serie diaria del periodo (de los mismos datos del cubo).
+      const daily: DashboardData['daily'] = [];
+      if (cube.length > 0) {
+        const firstDate = cube.reduce((m, c) => (c.date < m ? c.date : m), cube[0]!.date);
+        const dayTo = period.to !== null && period.to < anchor ? period.to : anchor;
+        let dayFrom = period.from ?? firstDate;
+        if (diffDays(dayFrom, dayTo) >= DASHBOARD_DAILY_MAX) dayFrom = addDays(dayTo, -(DASHBOARD_DAILY_MAX - 1));
+        if (dayFrom <= dayTo) {
+          let run = 0;
+          const byDay = new Map<IsoDate, { i: Minor; o: Minor; s: Minor }>();
+          for (const c of cube) {
+            if (c.date < dayFrom) run = minorOf(run + c.signedMinor);
+            else if (c.date <= dayTo) {
+              const e = byDay.get(c.date) ?? { i: 0, o: 0, s: 0 };
+              e.i = minorOf(e.i + c.totals.inMinor);
+              e.o = minorOf(e.o + c.totals.outMinor);
+              e.s = minorOf(e.s + c.signedMinor);
+              byDay.set(c.date, e);
+            }
+          }
+          for (let d = dayFrom; d <= dayTo; d = addDays(d, 1)) {
+            const e = byDay.get(d);
+            if (e !== undefined) run = minorOf(run + e.s);
+            const i = e?.i ?? 0;
+            const o = e?.o ?? 0;
+            daily.push({ date: d, inMinor: i, outMinor: o, netMinor: minorOf(i - o), balanceMinor: run });
+          }
+        }
+      }
+
       const allAccounts = ctx.accounts.map((a) => withBalance(a, stats.get(a.id)));
       const isEmpty = cube.length === 0;
       const backup = backupState(ctx.settings, isEmpty, clock);
@@ -1573,6 +1670,7 @@ export function createQueriesService(deps: CoreDeps): QueriesService {
           return { key, label: monthLabel(key), inMinor: t.inMinor, outMinor: t.outMinor, netMinor: t.netMinor, count: t.count };
         }),
         series: { unit: seriesUnit, keys: seriesKeys, totalMinor: totalSeries, byAccount: byAccountSeries },
+        daily,
         accounts: allAccounts.filter((a) => a.archivedAt === null),
         breakdown: {
           groupBy: breakdownBy,
@@ -1594,6 +1692,7 @@ export function createQueriesService(deps: CoreDeps): QueriesService {
         attention: {
           negativeAccounts: allAccounts.filter((a) => a.isNegative && a.archivedAt === null),
           unbalancedBatches: ctx.unbalanced,
+          possibleDuplicates: { count: dupItems.length, days: DASHBOARD_DUPLICATE_DAYS, items: dupItems.slice(0, 20) },
           backup,
         },
         recent,

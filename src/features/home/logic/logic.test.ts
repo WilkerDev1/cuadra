@@ -8,6 +8,13 @@ import { desktopOptions, formatPeriodParam, monthInRange, parsePeriodParam, peri
 
 const TODAY = '2026-11-27';
 
+describe('flowGeometry sin movimientos', () => {
+  it('da divisiones enteras (las formatea Money)', () => {
+    const geo = flowGeometry([{ key: '2026-11', inMinor: 0, outMinor: 0, netMinor: 0 }], 300, 120);
+    expect(geo.ticks.every((t) => Number.isSafeInteger(t.value))).toBe(true);
+  });
+});
+
 describe('periodo', () => {
   it('mes actual y anteriores', () => {
     expect(periodRange({ kind: 'month', offset: 0 }, TODAY)).toEqual({ from: '2026-11-01', to: '2026-11-30' });
@@ -172,6 +179,10 @@ describe('geometría', () => {
   });
   it('dominio y divisiones bonitas del saldo', () => {
     expect(niceStep(2_800_000, 4)).toBe(1_000_000);
+    // Montos en unidad menor: el paso nunca baja de 1 ni queda en 2.5 (un espacio sin movimientos daba 0.2).
+    expect(niceStep(1, 5)).toBe(1);
+    expect(niceStep(10, 4)).toBe(5);
+    expect(Number.isInteger(niceStep(9, 4))).toBe(true);
     expect(niceDomain([99_744_000, 377_232_000])).toMatchObject({ lo: 0, hi: 400_000_000, step: 100_000_000 });
     expect(niceDomain([11_770_000, 43_050_000]).values).toEqual([10_000_000, 20_000_000, 30_000_000, 40_000_000, 50_000_000]);
     expect(niceDomain([-500, 1500]).values).toEqual([-500, 0, 500, 1000, 1500]);

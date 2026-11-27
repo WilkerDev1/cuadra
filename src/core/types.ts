@@ -135,6 +135,8 @@ export interface Batch {
   createdAt: Timestamp;
   activeCount: number;
   voidedCount: number;
+  /** Anulados por el propio lote (voided_with_batch): los que `batches.restore` reviviría. 0 → no hay nada que restaurar. */
+  restorableCount: number;
 }
 
 export type Warning =
@@ -145,7 +147,8 @@ export type Warning =
   | { code: 'negative_balance'; accountId: Id; balanceAfterMinor: Minor }
   | { code: 'field_inactive'; fieldId: Id }
   | { code: 'field_missing'; fieldKeyOrId: string }
-  | { code: 'option_inactive'; fieldId: Id; optionId: Id };
+  | { code: 'option_inactive'; fieldId: Id; optionId: Id }
+  | { code: 'option_missing'; fieldId: Id; optionId: Id };
 
 /** Resultado de toda mutación: lo creado/cambiado + avisos que no bloquearon. */
 export interface Mutation<T> {

@@ -11,7 +11,7 @@ import { useSheet } from '../../../app/registry/sheet';
 import { addDays, type FieldValue, type Id, type Minor, type Transaction, type TxDraft, type TxPatch } from '../../../core';
 import { t as tGlobal, useT } from '../../../i18n';
 import { formatDate } from '../../../i18n/format';
-import { AccountChip, Button, Chip, DateField, Field, InfoTip, Segmented, Textarea, cx, evaluateExpression, type SegmentedOption } from '../../../ui';
+import { AccountChip, Button, Chip, Field, InfoTip, Segmented, Textarea, cx, evaluateExpression, type SegmentedOption } from '../../../ui';
 import { useCurrency, useKeypadMode, useOptionCounts, useSignedAmount, useSoftWarnings, useToday } from '../hooks';
 import {
   applySuggestion,
@@ -21,6 +21,7 @@ import {
   isDirty,
   isEmptyPatch,
   nextEntry,
+  staleValues,
   topOptions,
   validateEntry,
   type EntryError,
@@ -28,6 +29,7 @@ import {
 } from '../logic/entry';
 import { AccountPicker } from './AccountPicker';
 import { AmountEntry } from './AmountEntry';
+import { DateGroup } from './DateGroup';
 import { DescriptionInput } from './DescriptionInput';
 import { FieldsPanel } from './FieldsPanel';
 import { MiniTape, type TapeLine } from './Tape';
@@ -73,6 +75,11 @@ export function EntryForm({ initial, original }: EntryFormProps) {
 
   const schema = useFormSchema(state.kind);
   const fields = useMemo(() => schema.data?.fields ?? [], [schema.data]);
+  // Editar y cambiar de tipo: el formulario del tipo original dice qué valores dejan de aplicar (se vacían al guardar).
+  const originalKind = original?.kind === 'income' || original?.kind === 'expense' ? original.kind : initial.kind;
+  const fromSchema = useFormSchema(originalKind);
+  const fromFields = fromSchema.data?.fields;
+  const stale = editing && state.kind !== originalKind && fromFields !== undefined && schema.data !== undefined ? staleValues(state.values, fromFields, fields) : [];
   const category = categoryField(fields);
   const counts = useOptionCounts(category?.id, state.kind);
   const topCats = category === undefined ? [] : topOptions(category.options, counts, 6);
@@ -137,7 +144,7 @@ export function EntryForm({ initial, original }: EntryFormProps) {
     setSaveError(null);
     try {
       if (original !== undefined) {
-        const p = buildPatch(original, state, amount, fields);
+        const p = buildPatch(original, state, amount, fields, fromFields);
         if (!isEmptyPatch(p)) await update.mutateAsync({ id: original.id, patch: p });
         setDirty(false);
         sheet.close();
@@ -207,7 +214,21 @@ export function EntryForm({ initial, original }: EntryFormProps) {
     </span>
   ) : null;
 
-  const warningsView = <SoftWarnings warnings={warnings} />;
+  const staleView =
+    stale.length === 0 ? null : (
+      <p className="cap-meta" role="status">
+        {t('kind.staleValues', {
+          n: stale.length,
+          list: stale.map((x) => (x.label === '' ? x.field.label : `${x.field.label} «${x.label}»`)).join(', '),
+        })}
+      </p>
+    );
+  const warningsView = (
+    <>
+      {staleView}
+      <SoftWarnings warnings={warnings} />
+    </>
+  );
   const saveErr = saveError ?? (errors.includes('account') ? t('account.required') : null);
   const submitLabel = editing ? t('saveChanges') : keypad ? tGlobal(`ui.keypad.submit.${state.kind}`) : t('save');
 
@@ -239,10 +260,7 @@ export function EntryForm({ initial, original }: EntryFormProps) {
               <AccountPicker accounts={accounts} value={state.accountId} onChange={(accountId) => patch({ accountId })} label={t('account.label')} />
             )}
           </div>
-          <div className="cap-group">
-            <span className="cap-label">{t('date.label')}</span>
-            <DateField value={state.date} onChange={(date) => date !== '' && patch({ date })} today={today} />
-          </div>
+          <DateGroup label={t('date.label')} value={state.date} onChange={(date) => date !== '' && patch({ date })} today={today} />
           <FieldsPanel fields={fields} values={state.values} onChange={setValue} today={today} rev={rev} />
           <NotesField value={state.notes} onChange={(notes) => patch({ notes })} />
           {warningsView}
@@ -332,7 +350,7 @@ export function EntryForm({ initial, original }: EntryFormProps) {
         ) : null}
         {panel === 'date' ? (
           <div className="cap-panel">
-            <DateField value={state.date} onChange={(date) => date !== '' && patch({ date })} today={today} />
+            <DateGroup label={t('date.label')} value={state.date} onChange={(date) => date !== '' && patch({ date })} today={today} />
             <Button variant="secondary" onClick={() => { setPanel(null); setFocusSignal((n) => n + 1); }}>
               {t('done')}
             </Button>

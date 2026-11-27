@@ -147,23 +147,26 @@ export function Component() {
                 help={t('backup.settings.reminderHelp')}
                 error={reminderError ? t('backup.settings.reminderInvalid') : undefined}
               >
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  name="reminder-days"
-                  enterKeyHint="done"
-                  autoComplete="off"
-                  className="num"
-                  value={reminderValue}
-                  onChange={(e) => {
-                    setDraft(e.target.value);
-                    setReminderError(false);
-                  }}
-                />
+                {/* Campo y botón en la misma fila; la ayuda y el error debajo, a lo ancho. */}
+                <div className="bk-inline__row">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    name="reminder-days"
+                    enterKeyHint="done"
+                    autoComplete="off"
+                    className="num"
+                    value={reminderValue}
+                    onChange={(e) => {
+                      setDraft(e.target.value);
+                      setReminderError(false);
+                    }}
+                  />
+                  <Button type="submit" variant="secondary" disabled={!dirty}>
+                    {t('backup.settings.saveReminder')}
+                  </Button>
+                </div>
               </Field>
-              <Button type="submit" variant="secondary" disabled={!dirty}>
-                {t('backup.settings.saveReminder')}
-              </Button>
             </form>
           </Card>
 

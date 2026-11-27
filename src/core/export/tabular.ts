@@ -478,7 +478,8 @@ export function sheetToRows(sheet: Sheet): Cell[][] {
   const digits = sheet.currency?.minorDigits ?? 2;
   const money = sheet.columns.map((c) => c.type === 'money');
   return [
-    sheet.columns.map((c) => c.header),
+    // Las cabeceras también: los nombres de campo los escribe el usuario o llegan en una plantilla compartida.
+    sheet.columns.map((c) => csvSafeText(c.header)),
     ...sheet.rows.map((row) =>
       row.map((cell, i) =>
         money[i] && typeof cell === 'number' ? Money.toDecimalString(cell, digits) : typeof cell === 'string' ? csvSafeText(cell) : cell,
@@ -495,4 +496,12 @@ export function sheetToRows(sheet: Sheet): Cell[][] {
  */
 export function csvSafeText(text: string): string {
   return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+}
+
+/**
+ * Inversa exacta de `csvSafeText`, para importar un CSV: quita UN apóstrofo inicial solo si lo que sigue empieza
+ * por = + - @ tabulador o retorno de carro. Así exportar e importar devuelve «-Devolución», no «'-Devolución».
+ */
+export function csvUnsafeText(text: string): string {
+  return /^'[=+\-@\t\r]/.test(text) ? text.slice(1) : text;
 }

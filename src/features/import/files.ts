@@ -1,14 +1,7 @@
 // Descarga de archivos generados en el navegador (plantilla CSV y XLSX).
+import { saveFile } from '../../app/data/download';
 export function downloadBlob(blob: Blob, name: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.rel = 'noopener';
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  void saveFile(blob, name);
 }
 
 /** CSV con BOM para que Excel lo abra en UTF-8 y respete tildes. */

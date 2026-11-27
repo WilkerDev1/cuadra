@@ -106,7 +106,7 @@ export function createCuadra(deps: CuadraDeps): Cuadra {
 // ── Tipos y módulos puros públicos ───────────────────────────────────────────────────
 
 export type * from './types';
-export type { Clock, IdGen, Row, SqlDriver, SqlDriverInfo, SqlExecutor, SqlParams, SqlValue } from './ports';
+export type { Clock, IdGen, Row, SqlDriver, SqlDriverInfo, SqlExecutor, SqlParams, SqlStep, SqlValue } from './ports';
 export { DomainError, ERROR_CODES, isDomainError, isErrorCode, type ErrorCode } from './errors';
 export { err, ok, type Result } from './result';
 export { MAX_MINOR, Money, type MoneyFormatOptions, type MoneyParseError, type MoneyParseOptions } from './money';
@@ -152,6 +152,7 @@ export {
 } from './crypto';
 export {
   auditToSheet,
+  csvSafeText,
   reportToSheets,
   sheetToRows,
   summaryToSheet,
@@ -164,8 +165,26 @@ export {
 } from './export/tabular';
 export { groupFilter, previousRange } from './services/queries';
 export { serializeTemplate, templateFileName } from '../templates/schema';
-export { DEMO_PROFILES, hashPlan, type DemoPlan } from './demo';
 export {
+  DEMO_MONTHS,
+  DEMO_PROFILES,
+  DEMO_SEED,
+  hashPlan,
+  type DemoExtraAccount,
+  type DemoExtraField,
+  type DemoItem,
+  type DemoOpening,
+  type DemoPlan,
+  type DemoRow,
+  type DemoStep,
+  type DemoTemplateId,
+  type DemoValue,
+  type DemoValues,
+  type DemoView,
+} from './demo';
+export { MAX_DESCRIPTION_LENGTH, MAX_LABEL_LENGTH, MAX_NOTES_LENGTH } from './services/validation';
+export {
+  AUTH_AUTO_LOCK_CHOICES,
   AUTH_DEFAULT_AUTO_LOCK_MINUTES,
   AUTH_FREE_ATTEMPTS,
   AUTH_MAX_AUTO_LOCK_MINUTES,

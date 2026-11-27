@@ -1,6 +1,6 @@
-// Lógica pura de Respaldo: antigüedad del último respaldo, tamaños, validación de la contraseña y recorte de una
+// Lógica pura de Respaldo: antigüedad del último respaldo, tamaños, cifrado con la sesión y recorte de una
 // plantilla antes de descargarla. Sin DOM ni React: se prueba en logic.test.ts.
-import type { TemplateFile } from '../../core';
+import { DomainError, isDomainError, isEncryptedEnvelope, type EncryptedEnvelope, type TemplateFile } from '../../core';
 
 // ── Antigüedad del respaldo ────────────────────────────────────────────────────────────
 
@@ -54,17 +54,83 @@ export function formatBytes(bytes: number, locale = 'es-DO'): string {
   return `${new Intl.NumberFormat(locale, { maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(value)} ${units[unit]}`;
 }
 
-// ── Contraseña del respaldo ────────────────────────────────────────────────────────────
+// ── Cifrado con la contraseña de la sesión ─────────────────────────────────────────────
 
-export const MIN_BACKUP_PASSWORD = 8;
+/** Lo que hace falta para cifrar y descifrar con la contraseña de inicio de sesión (`cuadra.auth`). */
+export interface SessionCrypto {
+  encrypt(plaintext: string): Promise<EncryptedEnvelope>;
+  decrypt(envelope: EncryptedEnvelope): Promise<string>;
+}
 
-export type PasswordProblem = 'tooShort' | 'mismatch' | null;
+export interface PreparedBackup {
+  name: string;
+  text: string;
+  bytes: number;
+  encrypted: boolean;
+}
 
-/** Dos campos: el primero se valida al salir de él, el segundo al enviar. Vacío = sin problema (aún). */
-export function passwordProblem(password: string, repeat: string, opts: { checkRepeat: boolean }): PasswordProblem {
-  if (password.length < MIN_BACKUP_PASSWORD) return 'tooShort';
-  if (opts.checkRepeat && password !== repeat) return 'mismatch';
-  return null;
+const NAME_DATE = /(\d{4}-\d{2}-\d{2})\.cuadra\.json$/;
+
+/**
+ * Nombre de un respaldo cifrado: genérico, sin el nombre del espacio, para que el nombre del cliente no quede a la
+ * vista en la carpeta, el adjunto o la nube aunque el contenido vaya cifrado.
+ */
+export function encryptedBackupName(suggestedName: string, fallbackDate: string): string {
+  const date = NAME_DATE.exec(suggestedName)?.[1] ?? fallbackDate;
+  return `cuadra-respaldo-${date}.cuadra.json`;
+}
+
+/**
+ * Sella un respaldo ya exportado (en claro y verificado por el núcleo): sin `crypto` sale tal cual; con `crypto` se
+ * cifra con la contraseña de la sesión y se comprueba que se vuelve a abrir igual antes de entregarlo.
+ */
+export async function sealBackup(
+  out: { text: string; suggestedName: string; bytes: number },
+  crypto: SessionCrypto | null,
+  fallbackDate: string,
+): Promise<PreparedBackup> {
+  if (crypto === null) return { name: out.suggestedName, text: out.text, bytes: out.bytes, encrypted: false };
+  const envelope = await crypto.encrypt(out.text);
+  if ((await crypto.decrypt(envelope)) !== out.text) throw new DomainError('backup_invalid', { reason: 'verify' });
+  const text = JSON.stringify(envelope);
+  return { name: encryptedBackupName(out.suggestedName, fallbackDate), text, bytes: new TextEncoder().encode(text).length, encrypted: true };
+}
+
+export type OpenedBackup =
+  /** Texto que entiende `backup.inspect`: el original si no venía cifrado, o el descifrado con la sesión. */
+  | { kind: 'open'; text: string; encrypted: boolean }
+  /** Cifrado con otra contraseña (o sin sesión con la que probar): hay que pedirla. */
+  | { kind: 'needsPassword'; triedSession: boolean };
+
+/** Abre un archivo de respaldo: si viene cifrado, prueba primero la contraseña de la sesión. */
+export async function openBackupText(text: string, crypto: SessionCrypto | null): Promise<OpenedBackup> {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return { kind: 'open', text, encrypted: false }; // que el núcleo diga qué le pasa
+  }
+  if (!isEncryptedEnvelope(raw)) return { kind: 'open', text, encrypted: false };
+  if (crypto === null) return { kind: 'needsPassword', triedSession: false };
+  try {
+    return { kind: 'open', text: await crypto.decrypt(raw), encrypted: true };
+  } catch (error) {
+    if (isDomainError(error) && error.code === 'wrong_password') return { kind: 'needsPassword', triedSession: true };
+    throw error;
+  }
+}
+
+/**
+ * «Último respaldo» tras restaurar: la marca viaja dentro del archivo y la restauración la sobrescribe con la de
+ * otro momento (u otro equipo). Se queda la más reciente entre la local de antes y la fecha del propio archivo.
+ */
+export function lastVerifiedAfterRestore(previousLocal: string | null, fileCreatedAt: string): string | null {
+  const ms = (v: string | null) => (v === null ? Number.NaN : new Date(v).getTime());
+  const a = ms(previousLocal);
+  const b = ms(fileCreatedAt);
+  if (Number.isNaN(a) && Number.isNaN(b)) return null;
+  if (Number.isNaN(b) || a >= b) return previousLocal;
+  return fileCreatedAt;
 }
 
 // ── Archivo elegido ────────────────────────────────────────────────────────────────────

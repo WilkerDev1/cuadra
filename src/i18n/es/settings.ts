@@ -13,6 +13,8 @@ export default {
   'settings.load.retry': 'Reintentar',
   'settings.save': 'Guardar',
   'settings.cancel': 'Cancelar',
+  'settings.order': 'Ordenar',
+  'settings.orderDone': 'Listo',
   'settings.moveUp': 'Subir {name}',
   'settings.moveDown': 'Bajar {name}',
   'settings.moved': '«{name}» ahora es {position} de {total}.',
@@ -133,7 +135,7 @@ export default {
   'settings.field.previewIn': 'Entrada',
   'settings.field.previewOut': 'Salida',
   'settings.field.previewXfer': 'Transferencia',
-  'settings.field.previewBase': 'Monto · Cuenta · Fecha · Descripción',
+  'settings.field.previewBase': 'Monto · Cuenta · Fecha · Concepto',
   'settings.field.previewHere': 'Este campo',
   'settings.field.previewNot': 'Este campo no sale aquí.',
 

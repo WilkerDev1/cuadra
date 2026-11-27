@@ -67,6 +67,19 @@ const VOID_REASONS = ['Registrado dos veces', 'Monto equivocado', 'Era de la otr
 
 const ddmm = (d: IsoDate): string => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
+/**
+ * Parte de cada venta que hay que reponer comprando (costo de la mercancía, en %). Desde el 25 de octubre y
+ * en noviembre el colmado llena el almacén para diciembre; en diciembre vende lo ya comprado; en enero repone
+ * algo más de lo que vende (la cuesta de enero).
+ */
+function restockPercent(iso: IsoDate): number {
+  const m = monthOf(iso);
+  if (m === 11 || (m === 10 && dayOfMonth(iso) >= 25)) return 80;
+  if (m === 12) return 50;
+  if (m === 1) return 72;
+  return 63;
+}
+
 export function planColmado(opts: PlanOptions): DemoPlan {
   const rng = createRng(opts.seed);
   const anchor = opts.anchor;
@@ -75,7 +88,7 @@ export function planColmado(opts: PlanOptions): DemoPlan {
 
   const openings = {
     caja: { amountMinor: rd(15_000), direction: 'in' as const, date: start },
-    banco: { amountMinor: rd(120_000), direction: 'in' as const, date: start },
+    banco: { amountMinor: rd(230_000), direction: 'in' as const, date: start },
     tarjeta: { amountMinor: rd(8_500), direction: 'out' as const, date: start },
   };
   for (const [k, o] of Object.entries(openings)) b.opening(k, o);
@@ -110,10 +123,27 @@ export function planColmado(opts: PlanOptions): DemoPlan {
     }
   };
 
+  /**
+   * Costo de lo vendido que falta reponer: cada día suma su parte de la venta y las compras lo van pagando.
+   * Así las compras siguen a las ventas (margen bruto de un colmado) y el saldo no crece sin parar.
+   */
+  let toRestock = rd(40_000);
+  /** Bancos: lo que se deja sin tocar para alquiler, nómina y cuota del préstamo. */
+  const bankReserve = rd(60_000);
+
   const purchase = (date: IsoDate, opts2: { cheque?: boolean; credit?: boolean } = {}) => {
+    if (toRestock < rd(6_000)) return null;
     const dist = rng.pick(DISTRIBUIDORAS);
-    const amount = rng.rangeMinor(rd(8_000), rd(45_000), rd(50));
-    const fromCaja = !opts2.cheque && !opts2.credit && rng.chance(0.6) && b.balanceOf('caja') > amount + rd(5_000);
+    const share = opts2.credit ? rng.int(30, 45) : rng.int(55, 85);
+    let amount = roundToUnit(percentOf(toRestock, share), rd(50));
+    amount = Math.min(Math.max(amount, rd(6_000)), rd(95_000));
+    const fromCaja = !opts2.cheque && !opts2.credit && rng.chance(0.55) && b.balanceOf('caja') > amount + rd(5_000);
+    if (!fromCaja) {
+      // Sin fondos en el banco la compra espera (lo pendiente sigue en toRestock).
+      const room = b.balanceOf('banco') - bankReserve;
+      if (room < rd(6_000)) return null;
+      amount = Math.min(amount, roundToUnit(room, rd(50)));
+    }
     const account = fromCaja ? 'caja' : 'banco';
     const values: DemoValues = {
       categoria: rng.chance(0.85) ? 'mercancia' : 'suministros',
@@ -123,7 +153,7 @@ export function planColmado(opts: PlanOptions): DemoPlan {
     if (rng.chance(0.6)) values['comprobante'] = ncf('B01', (invoice += 1));
     if (opts2.cheque || opts2.credit) values['vencimiento'] = addDays(date, opts2.credit ? 30 : 15);
     if (compareIsoDate(date, unitsUntil) < 0 && values['categoria'] === 'mercancia') values['unidades'] = rng.int(12, 320);
-    return b.tx({
+    const ref = b.tx({
       account,
       kind: 'expense',
       amountMinor: amount,
@@ -131,6 +161,8 @@ export function planColmado(opts: PlanOptions): DemoPlan {
       description: opts2.credit ? `Pago de compra a crédito — ${dist.label}` : `Compra de mercancía — ${dist.label}`,
       values,
     });
+    if (ref !== null) toRestock = Money.sub(toRestock, amount);
+    return ref;
   };
 
   days.forEach((date, index) => {
@@ -168,7 +200,10 @@ export function planColmado(opts: PlanOptions): DemoPlan {
         rows,
         ...(mismatch ? { mismatchMinor: diff, mismatchNote: note } : {}),
       });
-      if (ref !== null) salesByMonth.set(mKey, Money.add(salesByMonth.get(mKey) ?? 0, Money.sum(amounts)));
+      if (ref !== null) {
+        salesByMonth.set(mKey, Money.add(salesByMonth.get(mKey) ?? 0, Money.sum(amounts)));
+        toRestock = Money.add(toRestock, percentOf(Money.sum(amounts), restockPercent(date)));
+      }
       // Un día se anotó dos veces (más tarde se anula el lote entero).
       if (index === dupDayIndex) {
         dupCapture = b.capture({
@@ -184,6 +219,7 @@ export function planColmado(opts: PlanOptions): DemoPlan {
       // ── Ventas con tarjeta: la liquidación del datáfono llega al banco ──
       if (wd !== 0) {
         const card = rng.normalMinor(percentOf(percentOf(rd(5_500), seasonPercent(date)), paydayPercent(date)), rd(1_500), rd(5));
+        toRestock = Money.add(toRestock, percentOf(card, restockPercent(date)));
         b.tx({
           account: 'banco',
           kind: 'income',
@@ -199,7 +235,7 @@ export function planColmado(opts: PlanOptions): DemoPlan {
         b.tx({
           account: 'caja',
           kind: 'expense',
-          amountMinor: rng.rangeMinor(rd(1_200), rd(2_400), rd(25)),
+          amountMinor: rng.rangeMinor(rd(1_200), rd(2_400), rd(5)),
           date,
           description: 'Compra de pan para reventa — Panadería El Buen Trigo',
           values: { categoria: 'mercancia', metodo_pago: 'efectivo', contacto: 'panaderia' },
@@ -269,7 +305,21 @@ export function planColmado(opts: PlanOptions): DemoPlan {
       b.tx({ account: 'banco', kind: 'expense', amountMinor: rng.rangeMinor(rd(150), rd(350), rd(5)), date, description: 'Comisiones bancarias', values: { categoria: 'comisiones', metodo_pago: 'transferencia' } });
     }
     if (dom === 14 || date === lastDayOfMonth(date)) {
-      b.tx({ account: 'banco', kind: 'expense', amountMinor: rng.rangeMinor(rd(25_000), rd(40_000), rd(500)), date, description: 'Retiro del dueño', values: { categoria: 'retiro_dueno', metodo_pago: 'transferencia' } });
+      // El dueño se paga dos veces al mes; si sobra dinero (más de lo que el negocio necesita para girar)
+      // se lleva parte del excedente, y en un mes apretado retira menos o nada.
+      const liquid = Money.add(b.balanceOf('caja'), b.balanceOf('banco'));
+      const surplus = Math.max(0, liquid - rd(360_000));
+      const amount = Money.add(rng.rangeMinor(rd(18_000), rd(30_000), rd(500)), roundToUnit(percentOf(surplus, 40), rd(500)));
+      const room = b.balanceOf('banco') - bankReserve;
+      const take = room >= amount ? amount : roundToUnit(Math.max(0, room), rd(500));
+      if (take >= rd(5_000)) b.tx({ account: 'banco', kind: 'expense', amountMinor: take, date, description: 'Retiro del dueño', values: { categoria: 'retiro_dueno', metodo_pago: 'transferencia' } });
+    }
+    // Gastos grandes que no son de todos los meses.
+    if (date === dayIn(months[8] ?? anchor, 9)) {
+      b.tx({ account: 'banco', kind: 'expense', amountMinor: rd(48_500), date, description: 'Reparación del techo del local', values: { categoria: 'mantenimiento', metodo_pago: 'transferencia', comprobante: ncf('B01', (invoice += 1)) } });
+    }
+    if (monthOf(date) === 8 && dom === 4) {
+      b.tx({ account: 'banco', kind: 'expense', amountMinor: rd(40_000), date, description: 'Retiro del dueño (inscripción y útiles de los hijos)', values: { categoria: 'retiro_dueno', metodo_pago: 'transferencia' } });
     }
     if (dom === 15) {
       b.tx({ account: 'banco', kind: 'expense', amountMinor: rd(45_000), date, description: 'Cuota del préstamo de la nevera industrial', values: { categoria: 'pago_prestamo', metodo_pago: 'transferencia' } });

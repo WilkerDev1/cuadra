@@ -2,6 +2,7 @@
 import { isIsoDate, presetRange, toIsoDate } from '../../core';
 import type { AuditAction, AuditEntry, DateRange, Field, Id, IsoDate, Minor, PeriodPreset, TxKind } from '../../core';
 import { PERIOD_PRESETS } from '../../core';
+import { dayDiff } from '../../i18n/format';
 
 // ── Filtros ─────────────────────────────────────────────────────────────────────────────
 
@@ -139,13 +140,34 @@ export function textParams(params: AuditEntry['params']): Record<string, string 
   return out;
 }
 
-/** Monto que acompaña a la entrada: el del movimiento o la suma del lote. */
+/**
+ * Monto que acompaña a la entrada: el del movimiento o el total de un lote de un solo sentido. Un lote sin sentido
+ * (datos de ejemplo, importaciones mixtas) suma entradas y salidas: ese total no significa nada y no se muestra.
+ */
 export function entryAmount(e: AuditEntry): { minor: Minor; kind: TxKind | undefined } | null {
   const p = e.params ?? {};
-  const minor = typeof p['amountMinor'] === 'number' ? p['amountMinor'] : typeof p['sumMinor'] === 'number' ? p['sumMinor'] : null;
+  const kindParam = p['kind'];
+  const kind = kindParam === 'income' || kindParam === 'expense' || kindParam === 'transfer' || kindParam === 'opening' ? kindParam : undefined;
+  const single = typeof p['amountMinor'] === 'number' ? p['amountMinor'] : null;
+  const total = typeof p['sumMinor'] === 'number' && kind !== undefined ? p['sumMinor'] : null;
+  const minor = single ?? total;
   if (minor === null || !Number.isSafeInteger(minor)) return null;
-  const kind = p['kind'];
-  return { minor, kind: kind === 'income' || kind === 'expense' || kind === 'transfer' || kind === 'opening' ? kind : undefined };
+  return { minor, kind };
+}
+
+/** Clave del rótulo de la acción: «Anotado» es solo de movimientos; crear una vista, un campo o una cuenta es «Creación». */
+export function actionLabelKey(e: Pick<AuditEntry, 'action' | 'entityType'>): string {
+  const recorded = e.entityType === 'transaction' || e.entityType === 'transfer' || e.entityType === 'batch' || e.entityType === null;
+  return e.action === 'create' && !recorded ? 'action.created' : `action.${e.action}`;
+}
+
+/** Cabecera de un día: «Hoy», «Ayer» o el día de la semana; la fecha completa va aparte, una sola vez. */
+export function dayHeading(day: IsoDate, today: IsoDate): string {
+  const diff = dayDiff(day, today);
+  if (diff === 0) return 'Hoy';
+  if (diff === -1) return 'Ayer';
+  const [y = 0, m = 1, d = 1] = day.split('-').map(Number);
+  return new Intl.DateTimeFormat('es-DO', { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d, 12)));
 }
 
 export type LinkKind = 'transaction' | 'transfer' | 'batch' | 'account';

@@ -1,5 +1,5 @@
 import { CircleAlert, Download, Share2 } from 'lucide-react';
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useAuth, useSetting, useWorkspaces } from '../../../app/data/hooks';
 import { useCuadra } from '../../../app/data/CuadraProvider';
@@ -8,9 +8,9 @@ import { useUiStore } from '../../../app/state/uiStore';
 import { isCryptoAvailable, type BackupScope } from '../../../core';
 import { formatDate, getLocale } from '../../../i18n/format';
 import { useT } from '../../../i18n';
-import { Button, Card, Field, InfoTip, Input, Segmented, Select, Switch } from '../../../ui';
+import { Button, Card, Field, InfoTip, Segmented, Select, Switch } from '../../../ui';
 import { canShareFile, saveTextFile, shareFile } from '../files';
-import { backupAge, formatBytes, localIsoDate, passwordProblem, type PasswordProblem } from '../logic';
+import { backupAge, formatBytes, localIsoDate, sealBackup } from '../logic';
 
 interface ExportResult {
   name: string;
@@ -32,14 +32,10 @@ export function ExportCard() {
 
   const [scope, setScope] = useState<'all' | 'workspace'>('all');
   const [wsId, setWsId] = useState('');
-  const [encrypt, setEncrypt] = useState(false);
-  const [pw, setPw] = useState('');
-  const [pw2, setPw2] = useState('');
-  const [problem, setProblem] = useState<PasswordProblem>(null);
+  // Con la contraseña activada, el respaldo sale cifrado con ella salvo que la persona lo apague a propósito.
+  const [encrypt, setEncrypt] = useState(true);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ExportResult | null>(null);
-  const pwRef = useRef<HTMLInputElement>(null);
-  const pw2Ref = useRef<HTMLInputElement>(null);
 
   const list = workspaces.data ?? [];
   useEffect(() => {
@@ -63,33 +59,26 @@ export function ExportCard() {
         : t(`backup.age.${age.kind}`, { n: age.n });
 
   const noSpaces = scope === 'workspace' && list.length === 0;
+  const withPassword = encrypt && canEncrypt && cryptoOk;
+  const plainOnPurpose = canEncrypt && cryptoOk && !encrypt;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy || noSpaces) return;
-    const withPassword = encrypt && canEncrypt && cryptoOk;
-    if (withPassword) {
-      const p = passwordProblem(pw, pw2, { checkRepeat: true });
-      setProblem(p);
-      if (p !== null) {
-        (p === 'mismatch' ? pw2Ref : pwRef).current?.focus();
-        return;
-      }
-    }
     setBusy(true);
     setResult(null);
     try {
       const target: BackupScope = scope === 'all' ? { scope: 'all' } : { scope: 'workspace', workspaceId: wsId };
-      const out = await cuadra.backup.export({ ...target, ...(withPassword ? { password: pw } : {}) });
-      const saved = await saveTextFile({ name: out.suggestedName, text: out.text, description: t('backup.export.download') });
+      // El núcleo exporta en claro y lo verifica; si toca, se cifra con la contraseña de la sesión (cuadra.auth).
+      const out = await cuadra.backup.export(target);
+      const sealed = await sealBackup(out, withPassword ? cuadra.auth : null, localIsoDate(new Date().toISOString()) ?? '');
+      const saved = await saveTextFile({ name: sealed.name, text: sealed.text, description: t('backup.export.download') });
       if (saved === 'cancelled') {
         toast({ message: 'backup.export.cancelled' });
         return;
       }
       await cuadra.backup.markVerified();
-      setResult({ name: out.suggestedName, bytes: out.bytes, encrypted: out.encrypted, text: out.text });
-      setPw('');
-      setPw2('');
+      setResult({ name: sealed.name, bytes: sealed.bytes, encrypted: sealed.encrypted, text: sealed.text });
       toast({ message: 'backup.export.saved' });
     } catch (error) {
       toast({ message: 'common.error.toast', params: { message: errorMessage(error, t) }, tone: 'warn' });
@@ -156,54 +145,22 @@ export function ExportCard() {
             <Switch
               label={t('backup.export.encrypt')}
               description={cryptoOk ? t('backup.export.encryptDesc') : t('backup.export.noCrypto')}
-              checked={encrypt && cryptoOk}
+              checked={withPassword}
               disabled={!cryptoOk}
-              onChange={(v) => {
-                setEncrypt(v);
-                setProblem(null);
-              }}
+              onChange={setEncrypt}
             />
-            {encrypt && cryptoOk ? (
-              <div className="bk-pwgrid">
-                <Field label={t('backup.export.password')} error={problem === 'tooShort' ? t('backup.export.tooShort') : undefined}>
-                  <Input
-                    ref={pwRef}
-                    type="password"
-                    name="backup-password"
-                    autoComplete="new-password"
-                    enterKeyHint="next"
-                    value={pw}
-                    onChange={(e) => {
-                      setPw(e.target.value);
-                      if (problem === 'tooShort') setProblem(null);
-                    }}
-                    onBlur={() => {
-                      if (pw !== '' && passwordProblem(pw, pw2, { checkRepeat: false }) !== null) setProblem('tooShort');
-                    }}
-                  />
-                </Field>
-                <Field label={t('backup.export.repeat')} error={problem === 'mismatch' ? t('backup.export.mismatch') : undefined}>
-                  <Input
-                    ref={pw2Ref}
-                    type="password"
-                    name="backup-password-repeat"
-                    autoComplete="new-password"
-                    enterKeyHint="done"
-                    value={pw2}
-                    onChange={(e) => {
-                      setPw2(e.target.value);
-                      if (problem === 'mismatch') setProblem(null);
-                    }}
-                  />
-                </Field>
-              </div>
+            {plainOnPurpose ? (
+              <p className="bk-plainwarn" data-testid="backup-plain-warn">
+                <CircleAlert aria-hidden="true" />
+                <span>{t('backup.export.plainWarn')}</span>
+              </p>
             ) : null}
           </div>
         ) : null}
 
         <div className="bk-actions">
           <Button type="submit" variant="primary" icon={Download} loading={busy} disabled={noSpaces}>
-            {busy ? t('backup.export.preparing') : t('backup.export.download')}
+            {busy ? t('backup.export.preparing') : plainOnPurpose ? t('backup.export.downloadPlain') : t('backup.export.download')}
           </Button>
           {result !== null && shareFileObj !== null && canShareFile(shareFileObj) ? (
             <Button variant="secondary" icon={Share2} onClick={() => void share()}>

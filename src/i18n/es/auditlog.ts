@@ -36,6 +36,7 @@ export default {
 
   // Rótulo de cada acción (línea de meta)
   'auditlog.action.create': 'Anotado',
+  'auditlog.action.created': 'Creación',
   'auditlog.action.edit': 'Editado',
   'auditlog.action.void': 'Anulado',
   'auditlog.action.restore': 'Restaurado',

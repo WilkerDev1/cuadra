@@ -31,8 +31,22 @@ export const DescriptionInput = forwardRef<HTMLInputElement, DescriptionInputPro
   const [focused, setFocused] = useState(false);
   const all = useSuggestions(value, kind);
   const chips = suggestWhenIdle || focused || value.trim() !== '' ? visibleSuggestions(all, value, 3) : [];
+  // El foco cuenta para todo el bloque (campo + chips): con Tab se llega a las sugerencias sin que desaparezcan al
+  // salir del campo (focusin/focusout sobre el contenedor, mirando a dónde va el foco).
   return (
-    <div className="cap-desc">
+    <div
+      className="cap-desc"
+      onFocus={() => {
+        if (focused) return;
+        setFocused(true);
+        onFocusChange?.(true);
+      }}
+      onBlur={(e) => {
+        if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;
+        setFocused(false);
+        onFocusChange?.(false);
+      }}
+    >
       <Field label={label ?? t('description.label')} {...(error === null || error === undefined ? {} : { error })}>
         <Input
           ref={ref}
@@ -41,14 +55,6 @@ export const DescriptionInput = forwardRef<HTMLInputElement, DescriptionInputPro
           autoComplete="off"
           enterKeyHint="done"
           onChange={(e) => onChange(e.currentTarget.value)}
-          onFocus={() => {
-            setFocused(true);
-            onFocusChange?.(true);
-          }}
-          onBlur={() => {
-            setFocused(false);
-            onFocusChange?.(false);
-          }}
           onKeyDown={(e) => {
             if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || onDone === undefined) return;
             e.preventDefault();

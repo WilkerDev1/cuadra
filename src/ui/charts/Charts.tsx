@@ -5,7 +5,7 @@ import { formatDate, getLocale } from '../../i18n/format';
 import { cx } from '../lib';
 import { AmountText, DEFAULT_CURRENCY } from '../domain/AmountText';
 import { amountParts } from '../domain/amountLogic';
-import { arcPath, ladderSeries, linePath, niceCeil, sparkPoints, stepPath, type DayFlow } from './chartMath';
+import { ladderSeries, linePath, niceCeil, sparkPoints, stepPath, type DayFlow } from './chartMath';
 
 /** Ancho real del contenedor para dibujar en píxeles (trazos nítidos, sin deformar). */
 function useWidth<T extends HTMLElement>(fallback: number): [RefObject<T | null>, number] {
@@ -282,73 +282,6 @@ export function Ladder({ title, days, openingMinor, currency = DEFAULT_CURRENCY,
             <AmountText key="b" minor={d.balance} size="table" notation="parens" currency={currency} />,
           ],
         }))}
-      />
-    </figure>
-  );
-}
-
-// ── Dona ────────────────────────────────────────────────────────────────────────────────
-
-export interface DonutDatum {
-  id: string;
-  label: string;
-  minor: Minor;
-  /** Tinta de lomo: `var(--tint-3)`. */
-  tint: string;
-}
-
-export interface DonutProps {
-  title: string;
-  data: readonly DonutDatum[];
-  currency?: Currency;
-  /** Texto bajo el total central. */
-  centerLabel?: string;
-}
-
-/** Anillo de reparto con leyenda rotulada directamente (sin cruzar colores). Prefiere `Bars` (DESIGN §15). */
-export function Donut({ title, data, currency = DEFAULT_CURRENCY, centerLabel }: DonutProps) {
-  const t = useT();
-  const total = data.reduce((s, d) => s + d.minor, 0);
-  const pct = (m: Minor) => new Intl.NumberFormat(getLocale(), { style: 'percent', maximumFractionDigits: 0 }).format(total === 0 ? 0 : m / total);
-  let acc = 0;
-  const arcs = data.map((d) => {
-    const a0 = total === 0 ? 0 : acc / total;
-    acc += d.minor;
-    const a1 = total === 0 ? 0 : acc / total;
-    return { ...d, a0, a1 };
-  });
-  return (
-    <figure className="ui-chart ui-donut">
-      <figcaption className="visually-hidden">{title}</figcaption>
-      <div className="ui-donut__body" aria-hidden="true">
-        <svg viewBox="0 0 120 120" className="ui-donut__svg">
-          <circle cx="60" cy="60" r="47" className="ui-donut__track" />
-          {arcs.map((a) =>
-            a.a1 - a.a0 >= 0.999 ? (
-              <circle key={a.id} cx="60" cy="60" r="47" className="ui-donut__full" style={{ stroke: a.tint }} />
-            ) : a.a1 > a.a0 ? (
-              <path key={a.id} d={arcPath(60, 60, 56, 38, a.a0, a.a1)} style={{ fill: a.tint }} className="ui-donut__seg" />
-            ) : null,
-          )}
-        </svg>
-        <div className="ui-donut__center">
-          <AmountText minor={total} size="m" currency={currency} neutral />
-          {centerLabel === undefined ? null : <span className="meta">{centerLabel}</span>}
-        </div>
-      </div>
-      <ul role="list" className="ui-donut__legend" aria-hidden="true">
-        {data.map((d) => (
-          <li key={d.id}>
-            <span className="ui-donut__dot" style={{ background: d.tint }} />
-            <span className="truncate">{d.label}</span>
-            <span className="num ink-3">{pct(d.minor)}</span>
-          </li>
-        ))}
-      </ul>
-      <TableFallback
-        caption={title}
-        head={[t('ui.chart.label'), t('ui.chart.amount'), t('ui.chart.share')]}
-        rows={data.map((d) => ({ key: d.id, cells: [d.label, <AmountText key="a" minor={d.minor} size="table" currency={currency} neutral />, pct(d.minor)] }))}
       />
     </figure>
   );

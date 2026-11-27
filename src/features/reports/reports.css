@@ -90,7 +90,11 @@
   border-radius: var(--r-1);
   overflow-wrap: break-word;
 }
-@container repstage (width >= 40rem) { .rep-paper { padding: var(--s-10) var(--s-10) var(--s-12); } }
+@container repstage (width >= 40rem) { .rep-paper { padding: var(--s-6) var(--s-6) var(--s-8); } }
+@container repstage (width >= 60rem) { .rep-paper { padding: var(--s-10) var(--s-10) var(--s-12); } }
+
+/* En tableta la hoja conserva su ancho de Carta y se reduce a escala (ver `useFitPaper`); en teléfono se apila. */
+.rep-paper[data-fit] { inline-size: 46rem; max-inline-size: none; margin-inline: 0; zoom: var(--rep-zoom, 1); }
 
 .rep-head { display: grid; gap: var(--s-1); padding-block-end: var(--s-4); border-block-end: var(--bw-2) solid var(--ink); }
 .rep-head__space { margin: 0; font-size: var(--t-h2); font-weight: var(--w-title); font-stretch: var(--wd-wide); letter-spacing: -0.01em; line-height: var(--lh-snug); }
@@ -103,7 +107,13 @@
 .rep-section { display: grid; gap: var(--s-2); margin-block-start: var(--s-8); min-inline-size: 0; }
 .rep-section__title { margin: 0; font-size: var(--t-h3); font-weight: var(--w-strong); font-stretch: var(--wd-normal); }
 .rep-table .ui-table { font-size: var(--t-small); }
-.rep-table .ui-table-wrap { overflow-x: auto; }
+.rep-table.ui-table-wrap { overflow-x: auto; }
+.rep-table--movements .ui-table { table-layout: fixed; min-inline-size: 36rem; }
+.rep-table--movements .ui-table th.is-grow { inline-size: auto; }
+.rep-table--movements .ui-table :is(th, td) { padding-inline: var(--s-2); }
+.rep-table--movements .ui-table td:not(.is-grow) { overflow: hidden; text-overflow: ellipsis; }
+.rep-chunk { content-visibility: auto; contain-intrinsic-block-size: auto calc(var(--rows, 20) * var(--fila-densa) + 6rem); }
+.rep-chunk__title { margin: var(--s-4) 0 var(--s-1); font-size: var(--t-small); font-weight: var(--w-strong); font-stretch: var(--wd-normal); color: var(--ink-2); text-transform: capitalize; }
 .rep-table thead th { position: static; background: transparent; }
 .rep-table tfoot td { vertical-align: top; padding-block-start: var(--s-3); }
 .rep-table td:not(.is-grow) { white-space: nowrap; }
@@ -142,20 +152,31 @@
     --rule-strong: CanvasText;
     --fila-densa: 1.5rem;
     max-inline-size: none; padding: 0; box-shadow: none; border-radius: 0;
+    inline-size: auto !important; zoom: 1 !important;
     background: Canvas; color: CanvasText;
     font-size: 9.5pt;
   }
   .rep-head { break-after: avoid; }
   .rep-head__space { font-size: 16pt; }
   .rep-head__title { font-size: 14pt; }
+  /* El papel es blanco aunque la app esté en oscuro: el margen de la página toma el fondo de la raíz. */
+  :root, html, body { background: Canvas !important; color-scheme: light !important; }
   .rep-section { margin-block-start: 7mm; }
   .rep-section__title { break-after: avoid; font-size: 11pt; }
 
-  .rep-table .ui-table-wrap { overflow: visible !important; max-block-size: none !important; }
+  .rep-table.ui-table-wrap { overflow: visible !important; max-block-size: none !important; }
   .rep-table .ui-table thead { display: table-header-group; position: static; }
   .rep-table .ui-table tr { break-inside: avoid; }
   .rep-table .ui-table th { border-block-end: 0.5pt solid CanvasText; }
-  .rep-table .ui-table td { border-block-end: 0.5pt solid var(--rule); }
+  .rep-table .ui-table td { border-block-end: 0.5pt solid var(--rule); block-size: auto; padding-block: 2.2pt; }
+  /* El concepto completo en papel: nada de puntos suspensivos; la etiqueta de transferencia pasa a su propia línea. */
+  .rep-table .ui-table .is-grow { max-inline-size: none; overflow: visible; text-overflow: clip; white-space: normal; }
+  .rep-tag { display: block; margin-inline-start: 0; font-size: 8pt; font-style: italic; }
+  .rep-xfer::before { content: '['; }
+  .rep-xfer::after { content: ']'; }
+  .rep-table--movements .ui-table { min-inline-size: 0; }
+  .rep-chunk { content-visibility: visible; }
+  .rep-chunk__title { break-after: avoid; margin-block-start: 3mm; }
   .rep-table .ui-table tfoot { break-inside: avoid; }
   .rep-sign { break-inside: avoid; }
   .ui-amount--voided { text-decoration: line-through; }

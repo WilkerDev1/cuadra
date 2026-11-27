@@ -1,6 +1,6 @@
 // Mensajes entre wasmDriver (hilo principal) y db.worker.ts. Cada petición lleva un id; la respuesta
 // repite el id con ok/result o con un error serializado que el cliente reconstruye con su clase.
-import type { Row, SqlDriverInfo, SqlParams } from '../../core/ports';
+import type { Row, SqlDriverInfo, SqlParams, SqlStep } from '../../core/ports';
 
 export type StorageMode = 'opfs' | 'memory-idb';
 
@@ -10,6 +10,8 @@ export type WorkerRequestBody =
   | { op: 'get'; sql: string; params?: SqlParams }
   | { op: 'run'; sql: string; params?: SqlParams }
   | { op: 'runMany'; sql: string; rows: readonly SqlParams[] }
+  /** Sentencias distintas en orden, atómicas (SAVEPOINT): reservar seq + insertar, fila a fila, en un viaje. */
+  | { op: 'runSeries'; steps: readonly SqlStep[] }
   | { op: 'exec'; sql: string }
   | { op: 'export' }
   /** Vuelca ya a IndexedDB (modo memory-idb). En OPFS no hace nada. */
@@ -32,6 +34,7 @@ export interface WorkerResultMap {
   get: Row | undefined;
   run: { changes: number };
   runMany: { changes: number };
+  runSeries: { changes: number[] };
   exec: undefined;
   export: Uint8Array;
   flush: undefined;

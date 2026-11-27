@@ -2,7 +2,8 @@
 // entre pestañas → OPFS → respaldo :memory:+IndexedDB → migrar) y crea la fachada del núcleo.
 import { createCuadra, type Cuadra } from '../core';
 import { setLocale } from '../i18n/format';
-import { createRestoreCopySink, DataError, openDatabase, type OpenDatabaseOptions, type OpenedDatabase, type StorageStatus } from '../data';
+import { createRestoreCopySink, DataError, nativeFileSaver, openDatabase, type OpenDatabaseOptions, type OpenedDatabase, type StorageStatus } from '../data';
+import { setNativeSaver } from './data/download';
 
 export interface BootInfo {
   storage: StorageStatus;
@@ -65,6 +66,14 @@ export async function boot(hooks: BootHooks): Promise<void> {
       ...(typeof import.meta.env.VITE_APP_VERSION === 'string' ? { appVersion: import.meta.env.VITE_APP_VERSION } : {}),
       ...(autoCopy === undefined ? {} : { backupAutoCopy: autoCopy }),
     });
+    // En Tauri, las descargas van por el diálogo nativo «Guardar como».
+    if (db.info.kind === 'tauri') {
+      try {
+        setNativeSaver(await nativeFileSaver());
+      } catch {
+        // sin diálogo nativo: queda la descarga del webview
+      }
+    }
     // El formato regional guardado (Ajustes de instalación) vale desde el primer pintado.
     try {
       setLocale(await cuadra.settings.get('locale'));

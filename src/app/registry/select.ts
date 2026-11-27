@@ -114,3 +114,24 @@ export function findRegistryProblems(features: readonly FeatureModule[]): string
   }
   return problems;
 }
+
+/**
+ * De varias rutas de navegación, la que corresponde a `pathname`: la coincidencia más larga por segmentos (así en
+ * `ajustes/campos` solo se marca «Campos y listas» y no también «Ajustes del espacio»). Una ruta que es el índice de
+ * su scope (`/e/:wsId` o `/`) solo cuenta si coincide exacta. Devuelve el índice en `paths` o -1.
+ */
+export function pickActiveNav(paths: readonly string[], pathname: string, exact: readonly boolean[] = []): number {
+  const clean = (p: string) => p.replace(/\/+$/, '') || '/';
+  const here = clean(pathname);
+  let best = -1;
+  let bestLength = -1;
+  paths.forEach((raw, i) => {
+    const p = clean(raw);
+    const matches = p === here || (exact[i] !== true && p !== '/' && here.startsWith(`${p}/`));
+    if (matches && p.length > bestLength) {
+      best = i;
+      bestLength = p.length;
+    }
+  });
+  return best;
+}

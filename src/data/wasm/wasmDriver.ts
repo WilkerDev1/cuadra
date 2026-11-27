@@ -139,6 +139,7 @@ export async function openWasmDriver(
     get: (sql, params) => client.request({ op: 'get', sql, ...(params ? { params } : {}) }),
     run: (sql, params) => client.request({ op: 'run', sql, ...(params ? { params } : {}) }),
     runMany: (sql, rows) => client.request({ op: 'runMany', sql, rows }),
+    runSeries: (steps) => client.request({ op: 'runSeries', steps }),
     exec: (sql) => client.request({ op: 'exec', sql }),
     exportBytes: () => client.request({ op: 'export' }),
     close: async () => {

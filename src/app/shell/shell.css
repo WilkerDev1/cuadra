@@ -45,6 +45,9 @@
 }
 .skip-link {
   position: absolute;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
   inset-inline-start: var(--s-2);
   inset-block-start: calc(-1 * var(--s-16));
   background: var(--lime);
@@ -55,6 +58,18 @@
 }
 .skip-link:focus {
   inset-block-start: var(--s-2);
+}
+
+/* Lo enfocado con Tab no debe quedar bajo el encabezado pegado, la cabecera de día pegada de las listas ni la barra
+   inferior (WCAG 2.4.11). `scroll-padding` vive en el contenedor de scroll (html), que está fuera del contenedor
+   `page`, así que aquí sí se usa una media query de ancho (equivale al corte de 600 px del shell). */
+:root:has(.shell:not(.shell--root)) {
+  scroll-padding-block: calc(var(--fila) + var(--s-2)) var(--s-4);
+}
+@media (width < 600px) {
+  :root:has(.shell:not(.shell--root)) {
+    scroll-padding-block: calc(3.5rem + var(--fila) + var(--s-2)) calc(var(--nav-h) + var(--s-6) + env(safe-area-inset-bottom));
+  }
 }
 
 /* Pantallas sin marco: arranque, «abierta en otra pestaña», error, no encontrada */
@@ -88,6 +103,11 @@
   max-inline-size: 34rem;
   color: var(--ink-2);
   text-wrap: pretty;
+}
+.shell-update {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-2);
 }
 .shell-details {
   max-inline-size: 34rem;
@@ -148,10 +168,22 @@
 .lock-layer {
   position: fixed;
   inset: 0;
-  z-index: calc(var(--z-fab) + 10);
+  inline-size: 100%;
+  block-size: 100%;
+  max-inline-size: none;
+  max-block-size: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
   overflow: auto;
   background: var(--bg);
   color: var(--ink);
+}
+.lock-layer::backdrop {
+  background: var(--bg);
+}
+.lock-layer__main {
+  min-block-size: 100%;
 }
 
 /* Listas de navegación sin viñetas */
@@ -178,6 +210,14 @@
   padding-inline: var(--gutter) var(--s-2);
   background: var(--bg);
   border-block-end: var(--bw) solid var(--rule);
+}
+/* Con texto al 200 % o a 320 px el nombre se corta con «…»; buscar nunca sale de la pantalla. */
+.topbar > .ws-trigger {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+}
+.topbar > .ui-iconbtn {
+  flex: none;
 }
 
 /* Lomo del espacio: franja de tinta + inicial */
@@ -218,7 +258,18 @@
   font-weight: var(--w-strong);
   font-size: var(--t-h3);
 }
+.ws-trigger__name--loading {
+  inline-size: 8rem;
+  max-inline-size: 100%;
+  block-size: 1em;
+  border-radius: var(--r-1);
+  background: var(--rule);
+}
+.ws-trigger--on-forest .ws-trigger__name--loading {
+  background: color-mix(in oklch, var(--on-forest) 20%, transparent);
+}
 .ws-trigger__caret {
+  flex: none;
   inline-size: var(--icon-row);
   block-size: var(--icon-row);
   color: var(--ink-3);
@@ -315,8 +366,11 @@
   font-weight: var(--w-strong);
   min-inline-size: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 /* Saldo y rótulo «Ejemplo» juntos: a la derecha con ancho; bajo el nombre en la hoja del teléfono */
 .switcher__figure {
@@ -325,12 +379,6 @@
   align-items: center;
   gap: var(--s-2);
   min-inline-size: 0;
-}
-.switcher__figure .ui-chip {
-  flex: none;
-  min-block-size: 1.5rem;
-  padding-inline: var(--s-2);
-  font-size: var(--t-meta);
 }
 @container switcher (width < 24rem) {
   .switcher__item {
@@ -352,8 +400,21 @@
   }
 }
 .switcher__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-inline-size: 0;
   color: var(--ink-3);
   font-size: var(--t-meta);
+}
+.switcher__meta .ui-chip {
+  flex: none;
+  min-block-size: 1.5rem;
+  padding-inline: var(--s-2);
+  font-size: var(--t-meta);
+}
+.switcher__when {
+  min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -389,7 +450,7 @@
   block-size: var(--icon-row);
 }
 .switcher-pop {
-  inline-size: min(28rem, calc(100vw - 2 * var(--gutter)));
+  inline-size: min(32rem, calc(100vw - 2 * var(--gutter)));
   max-inline-size: none;
   max-block-size: min(30rem, 80dvh);
   overflow: auto;
@@ -502,7 +563,7 @@
   font-size: var(--t-h3);
 }
 .anotar--pill .anotar__caret {
-  inline-size: 2.25rem;
+  inline-size: 2.75rem; /* objetivo táctil de 44 px */
   padding-inline-end: var(--s-1);
   border-radius: 0 var(--r-pill) var(--r-pill) 0;
   border-inline-start: var(--bw) solid color-mix(in oklch, var(--on-lime) 18%, transparent);
@@ -645,10 +706,22 @@
 
 /* Página «Más» */
 .more {
+  container-type: inline-size;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-6);
   inline-size: 100%;
   max-inline-size: 40rem;
+}
+/* Con el texto muy grande (200 %) el segmentado de Apariencia no cabe en una línea: pasa a dos sin desbordar. */
+@container (width < 18rem) {
+  .more .ui-seg {
+    flex-wrap: wrap;
+    border-radius: var(--r-2);
+  }
+  .more .ui-seg__opt {
+    flex: 1 1 auto;
+  }
 }
 .more__group {
   display: grid;
@@ -694,6 +767,18 @@
   .more__list button:hover {
     background: var(--surface-2);
   }
+}
+/* Atajos de teclado solo donde hay un teclado físico probable (algún puntero fino). */
+@media not (any-pointer: fine) {
+  .more__keyboard {
+    display: none;
+  }
+}
+.more__switch {
+  padding: var(--s-3) var(--s-4);
+}
+.shortcut-list__toggle {
+  margin-block-end: var(--s-4);
 }
 .more__list :is(a, button):focus-visible {
   outline-offset: -2px;
@@ -1206,6 +1291,22 @@
   }
   .bottom-tabs a span {
     font-stretch: var(--wd-table);
+  }
+}
+
+/* Texto muy grande (≳ 150 %, el corte va en rem): la pastilla deja solo el «+» y las pestañas recuperan su sitio.
+   El texto «Anotar» sigue siendo el nombre accesible (recortado, no `display: none`). */
+@container page (width < 19rem) {
+  .anotar--pill .anotar__main {
+    padding-inline: var(--s-3) var(--s-1);
+  }
+  .anotar--pill .anotar__label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 

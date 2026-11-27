@@ -6,6 +6,16 @@ export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ');
 }
 
+/** Color de opción guardado como `tint-N` o `#rrggbb` → valor CSS (`var(--tint-N)` o el hex tal cual). */
+export function cssColor(color: string): string {
+  return /^tint-[1-8]$/.test(color) ? `var(--${color})` : color;
+}
+
+/** Tinta de lomo `tint-N` (1–8) → `var(--tint-N)`; cíclica para cualquier índice. */
+export function tintOf(index: number): string {
+  return `var(--tint-${(((Math.trunc(index) % 8) + 8) % 8) + 1})`;
+}
+
 /** Atributos HTML recientes que los tipos de React aún no conocen (closedby, interestfor, switch…). */
 export function htmlAttrs(attrs: Record<string, string | boolean | undefined>): Record<string, string> {
   const out: Record<string, string> = {};

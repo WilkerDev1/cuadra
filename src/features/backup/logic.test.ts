@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { TemplateFile } from '../../core';
+import { createTestCuadra } from '../../test/harness';
 import {
   backupAge,
   calendarDaysBetween,
+  encryptedBackupName,
+  lastVerifiedAfterRestore,
+  openBackupText,
+  sealBackup,
   formatBytes,
   includeCount,
   localIsoDate,
   normalizeInclude,
-  passwordProblem,
   pruneTemplate,
   viewsAvailable,
 } from './logic';
@@ -60,12 +64,79 @@ describe('formatBytes', () => {
   });
 });
 
-describe('passwordProblem', () => {
-  it('exige 8 caracteres y que coincidan al enviar', () => {
-    expect(passwordProblem('corta', 'corta', { checkRepeat: true })).toBe('tooShort');
-    expect(passwordProblem('suficiente', 'distinta', { checkRepeat: true })).toBe('mismatch');
-    expect(passwordProblem('suficiente', 'distinta', { checkRepeat: false })).toBeNull();
-    expect(passwordProblem('suficiente', 'suficiente', { checkRepeat: true })).toBeNull();
+describe('respaldo cifrado con la contraseña de la sesión', () => {
+  async function withPassword(password = 'clave-de-ana-123') {
+    const t = await createTestCuadra();
+    const { cuadra } = t;
+    await cuadra.workspaces.create({ name: 'Colmado La Esquina' });
+    await cuadra.auth.setup({ profileName: 'Ana', password });
+    return t;
+  }
+
+  it('cifra con la sesión, sin el nombre del espacio en el archivo, y se vuelve a abrir sin pedir contraseña', async () => {
+    const { cuadra } = await withPassword();
+    const [ws] = await cuadra.workspaces.list();
+    const out = await cuadra.backup.export({ scope: 'workspace', workspaceId: ws!.id });
+    expect(out.suggestedName).toContain('colmado');
+    const sealed = await sealBackup(out, cuadra.auth, '2026-06-15');
+    expect(sealed.encrypted).toBe(true);
+    expect(sealed.name).toBe('cuadra-respaldo-2026-06-15.cuadra.json');
+    expect(sealed.text).not.toContain('Colmado');
+    expect(JSON.parse(sealed.text)).toMatchObject({ format: 'cuadra-encrypted' });
+    expect(sealed.bytes).toBe(new TextEncoder().encode(sealed.text).length);
+
+    const opened = await openBackupText(sealed.text, cuadra.auth);
+    expect(opened).toMatchObject({ kind: 'open', encrypted: true });
+    if (opened.kind !== 'open') return;
+    const info = await cuadra.backup.inspect(opened.text);
+    expect(info.ok).toBe(true);
+    expect(info.workspaces.map((w) => w.name)).toEqual(['Colmado La Esquina']);
+  });
+
+  it('sin sesión con la que cifrar sale tal cual, en claro', async () => {
+    const { cuadra } = await createTestCuadra();
+    const out = await cuadra.backup.export({ scope: 'all' });
+    expect(await sealBackup(out, null, '2026-06-15')).toEqual({ name: out.suggestedName, text: out.text, bytes: out.bytes, encrypted: false });
+  });
+
+  it('un respaldo hecho con otra contraseña pide la contraseña; uno en claro se abre tal cual', async () => {
+    const a = await withPassword('la-de-antes-123');
+    const old = await sealBackup(await a.cuadra.backup.export({ scope: 'all' }), a.cuadra.auth, '2026-06-15');
+    const b = await withPassword('la-de-ahora-456');
+    expect(await openBackupText(old.text, b.cuadra.auth)).toEqual({ kind: 'needsPassword', triedSession: true });
+    expect(await openBackupText(old.text, null)).toEqual({ kind: 'needsPassword', triedSession: false });
+    const info = await b.cuadra.backup.inspect(old.text, { password: 'la-de-antes-123' });
+    expect(info.ok).toBe(true);
+    const plain = await b.cuadra.backup.export({ scope: 'all' });
+    expect(await openBackupText(plain.text, b.cuadra.auth)).toEqual({ kind: 'open', text: plain.text, encrypted: false });
+    expect(await openBackupText('no es json', b.cuadra.auth)).toEqual({ kind: 'open', text: 'no es json', encrypted: false });
+  });
+
+  it('el nombre genérico conserva la fecha del núcleo', () => {
+    expect(encryptedBackupName('cuadra-colmado-la-esquina-2026-11-27.cuadra.json', '2000-01-01')).toBe('cuadra-respaldo-2026-11-27.cuadra.json');
+    expect(encryptedBackupName('raro.json', '2026-11-27')).toBe('cuadra-respaldo-2026-11-27.cuadra.json');
+  });
+});
+
+describe('lastVerifiedAfterRestore', () => {
+  it('se queda la marca más reciente entre la local y la fecha del archivo', () => {
+    expect(lastVerifiedAfterRestore('2026-11-27T10:32:06.000Z', '2026-11-27T10:27:56.591Z')).toBe('2026-11-27T10:32:06.000Z');
+    expect(lastVerifiedAfterRestore('2026-10-01T00:00:00.000Z', '2026-11-27T10:27:56.591Z')).toBe('2026-11-27T10:27:56.591Z');
+    expect(lastVerifiedAfterRestore(null, '2026-11-27T10:27:56.591Z')).toBe('2026-11-27T10:27:56.591Z');
+    expect(lastVerifiedAfterRestore('2026-10-01T00:00:00.000Z', 'roto')).toBe('2026-10-01T00:00:00.000Z');
+    expect(lastVerifiedAfterRestore(null, 'roto')).toBeNull();
+  });
+
+  it('caso real: el núcleo ya conserva la marca local y la feature no la empeora', async () => {
+    const { cuadra } = await createTestCuadra();
+    await cuadra.backup.markVerified('2026-06-15T11:27:56.591Z');
+    const file = await cuadra.backup.export({ scope: 'all' });
+    await cuadra.backup.markVerified('2026-06-15T12:32:06.000Z');
+    const local = await cuadra.settings.get('backup.lastVerifiedAt');
+    const info = await cuadra.backup.inspect(file.text);
+    await cuadra.backup.restoreAll(file.text, { confirm: true });
+    expect(await cuadra.settings.get('backup.lastVerifiedAt')).toBe('2026-06-15T12:32:06.000Z');
+    expect(lastVerifiedAfterRestore(local, info.createdAt)).toBe('2026-06-15T12:32:06.000Z');
   });
 });
 

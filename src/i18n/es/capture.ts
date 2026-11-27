@@ -1,20 +1,21 @@
 // Cadenas de la captura (dueño: feature capture): Nuevo movimiento, Transferencia, Captura en tabla y Ráfaga.
 export default {
-  'capture.nav': 'Captura',
+  'capture.nav': 'Captura en lote',
   'capture.entry.title': 'Movimiento',
   'capture.entry.newTitle': 'Nuevo movimiento',
   'capture.entry.editTitle': 'Editar movimiento',
   'capture.entry.duplicateTitle': 'Duplicar movimiento',
   'capture.transfer.title': 'Transferencia',
-  'capture.table.title': 'Captura',
-  'capture.burst.title': 'Ráfaga',
+  'capture.table.title': 'Captura en lote',
+  'capture.burst.title': 'Captura en lote',
 
   'capture.quick.in': 'Entrada',
   'capture.quick.out': 'Salida',
   'capture.quick.transfer': 'Transferencia',
-  'capture.quick.burst': 'Ráfaga',
+  'capture.quick.burst': 'Captura en lote',
 
   'capture.kind.label': 'Tipo',
+  'capture.kind.staleValues': '{n, plural, one {Al guardar se quita {list}: no aplica a este tipo.} other {Al guardar se quitan {list}: no aplican a este tipo.}}',
   'capture.amount.label': 'Monto',
   'capture.amount.zero': 'Escribe un monto',
   'capture.amount.placeholder': '1,500 + 350',
@@ -85,6 +86,7 @@ export default {
   'capture.state.goAccounts': 'Ir a Cuentas',
   'capture.state.voided': 'Este movimiento está anulado. Restáuralo para editarlo.',
   'capture.state.openDetail': 'Ver el movimiento',
+  'capture.state.otherWorkspace': 'No encontramos este movimiento en este espacio. El enlace es de otro espacio: cambia de espacio para abrirlo.',
 
   'capture.batch.defaultLabel': 'Lote {date}, {time}',
   'capture.batch.settings': 'Datos del lote',
@@ -94,6 +96,8 @@ export default {
   'capture.batch.controlPlaceholder': 'Opcional',
   'capture.batch.controlShort': 'Control',
   'capture.batch.controlValue': 'Control {amount}',
+  'capture.batch.controlInvalid': 'El total de control no se entiende. Corrígelo o déjalo vacío para guardar.',
+  'capture.batch.controlBad': 'Control ?',
 
   'capture.grid.caption': 'Filas del lote',
   'capture.grid.date': 'Fecha',

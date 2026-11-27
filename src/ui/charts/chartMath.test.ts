@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { arcPath, ladderSeries, linePath, niceCeil, sparkPoints, stepPath } from './chartMath';
+import { ladderSeries, linePath, niceCeil, sparkPoints, stepPath } from './chartMath';
 
 describe('niceCeil', () => {
   it('redondea a un tope legible', () => {
@@ -37,8 +37,5 @@ describe('paths', () => {
       { x: 0, y: 18 },
       { x: 64, y: 2 },
     ]);
-  });
-  it('arcPath cierra un sector', () => {
-    expect(arcPath(50, 50, 40, 30, 0, 0.25)).toMatch(/^M50 10A40 40 0 0 1 90 50L80 50A30 30 0 0 0 50 20Z$/);
   });
 });

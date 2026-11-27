@@ -8,6 +8,7 @@ import {
   sanitizePastedAmount,
 } from './amountLogic';
 import { numberToSpanishWords, spokenMoney } from './spoken';
+import { pastedAmountExpr } from './amountText';
 
 const DOP = { code: 'DOP', minorDigits: 2 } as const;
 
@@ -90,6 +91,20 @@ describe('sanitizePastedAmount', () => {
   });
   it('recorta decimales sobrantes', () => {
     expect(sanitizePastedAmount('10.999', 'es-DO', 2)).toBe('10.99');
+  });
+});
+
+describe('pastedAmountExpr (pegado al teclado propio)', () => {
+  it('lee como Money.parse', () => {
+    expect(pastedAmountExpr('RD$ 1,250.50', 'es-DO', 2)).toBe('1250.5');
+    expect(pastedAmountExpr('1,5', 'es-DO', 2)).toBe('1.5');
+    expect(pastedAmountExpr('1500 + 350 − 20 × 2', 'es-DO', 2)).toBe('1500+350-20*2');
+  });
+  it('no recorta: lo que no se entiende queda como operación no válida', () => {
+    for (const text of ['10.999', '1.500.000', '1.234,56']) {
+      const expr = pastedAmountExpr(text, 'es-DO', 2);
+      expect(evaluateExpression(expr, 2).ok, text).toBe(false);
+    }
   });
 });
 

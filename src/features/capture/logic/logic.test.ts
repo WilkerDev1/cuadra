@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { AccountWithBalance, Field, FieldOption, Transaction } from '../../../core';
+import { Money, type AccountWithBalance, type Field, type FieldOption, type Transaction } from '../../../core';
 import { exprFromMinor, parseAmountText } from './amount';
-import { removeLine, remaining, sumLines, tail, toCaptureRows, upsertLine, type BurstLine } from './burst';
+import { controlGate, removeLine, remaining, sumLines, tail, toCaptureRows, upsertLine, type BurstLine } from './burst';
 import { isoToDmy, parseLooseDate } from './dates';
 import {
   applySuggestion,
@@ -12,6 +12,7 @@ import {
   parseEntryParams,
   pickAccount,
   resolveDescription,
+  staleValues,
   topOptions,
   validateEntry,
   visibleSuggestions,
@@ -157,6 +158,38 @@ describe('montos como texto', () => {
     expect(parseAmountText('US$ 20', 'es-DO', 2)).toMatchObject({ status: 'ok', minor: 2000 });
     expect(parseAmountText('100-500', 'es-DO', 2)).toMatchObject({ status: 'invalid', reason: 'negative' });
   });
+  it('rechaza separadores que no son del locale en vez de recortarlos', () => {
+    for (const s of ['1.500.000', '10.999', '1.234,56', '1,5,0', '1,50,000', '0.001']) {
+      expect(parseAmountText(s, 'es-DO', 2), s).toMatchObject({ status: 'invalid', reason: 'invalid' });
+    }
+    // También dentro de una expresión y en el total de control con palabras.
+    expect(parseAmountText('100+10.999', 'es-DO', 2).status).toBe('invalid');
+    expect(parseAmountText('1,500,000 pesos', 'es-DO', 2).status).toBe('invalid');
+    expect(parseAmountText('1.500.000', 'es-ES', 2)).toMatchObject({ status: 'ok', minor: 150_000_000 });
+    expect(parseAmountText('1.234,56', 'es-ES', 2)).toMatchObject({ status: 'ok', minor: 123_456 });
+  });
+  it('lee cada número igual que Money.parse del núcleo (saldo inicial, importación)', () => {
+    const currency = { code: 'DOP', minorDigits: 2 as const };
+    for (const s of ['1,5', '1,50', '1,500', '1,500.5', '10.90', '1.500', '0.5', '007', '12,345,678.9', '10.999', '1.500.000']) {
+      const core = Money.parse(s, { locale: 'es-DO', currency });
+      const here = parseAmountText(s, 'es-DO', 2);
+      expect(here.status === 'ok' ? here.minor : 'error', s).toEqual(core.ok ? core.value : 'error');
+    }
+    expect(parseAmountText('1,5', 'es-DO', 2)).toMatchObject({ status: 'ok', minor: 150 });
+  });
+  it('los factores de × no se recortan y redondean al final', () => {
+    expect(parseAmountText('3*0.333', 'es-DO', 2)).toMatchObject({ status: 'ok', minor: 100, expr: '3*0.333' });
+    expect(parseAmountText('1,000 × 1.18', 'es-DO', 2)).toMatchObject({ status: 'ok', minor: 118_000 });
+    expect(parseAmountText('100 x 2', 'es-DO', 2)).toMatchObject({ status: 'ok', minor: 20_000 });
+    expect(parseAmountText('100*1.2.3', 'es-DO', 2).status).toBe('invalid');
+    expect(parseAmountText('100*0.1234567', 'es-DO', 2).status).toBe('invalid');
+  });
+  it('operador final se ignora; operador doble o al principio es error', () => {
+    expect(parseAmountText('150+', 'es-DO', 2)).toMatchObject({ status: 'ok', minor: 15_000, expr: '150' });
+    expect(parseAmountText('150++5', 'es-DO', 2).status).toBe('invalid');
+    expect(parseAmountText('*5', 'es-DO', 2).status).toBe('invalid');
+    expect(parseAmountText('RD$100 + RD$50', 'es-DO', 2)).toMatchObject({ status: 'ok', minor: 15_000 });
+  });
   it('exprFromMinor corta texto sin dividir', () => {
     expect(exprFromMinor(185_050, 2)).toBe('1850.5');
     expect(exprFromMinor(185_000, 2)).toBe('1850');
@@ -209,6 +242,33 @@ describe('borrador de movimiento', () => {
     });
     const same = state({ date: '2026-11-20', description: 'Cemento', values: { ...tx.values } });
     expect(buildPatch(tx, same, 150_000, FIELDS)).toEqual({});
+  });
+  it('cambiar de tipo al editar vacía lo que solo aplicaba al tipo original', () => {
+    // Formulario de entrada: Categoría con Ventas (solo entradas) y un campo Cliente que solo existe en entradas.
+    const cat = (options: FieldOption[]) => field('cat', 'list', 'Categoría', { role: 'category', options });
+    const ventas = opt('ventas', 'Ventas', { appliesTo: 'in' });
+    const otros = opt('otros', 'Otros');
+    const cliente = field('cli', 'list', 'Cliente', { appliesTo: 'in', options: [opt('c1', 'Al contado', { fieldId: 'cli' })] });
+    const inFields = [cat([ventas, otros]), cliente, REF];
+    const outFields = [cat([otros, opt('alq', 'Alquiler', { appliesTo: 'out' })]), REF];
+    const tx = {
+      kind: 'income',
+      amountMinor: 521_000,
+      date: '2026-11-20',
+      description: 'Venta',
+      notes: '',
+      values: { cat: { type: 'list', optionId: 'ventas' }, cli: { type: 'list', optionId: 'c1' }, ref: { type: 'text', value: 'B01' }, old: { type: 'list', optionId: 'x' } },
+    } as unknown as Transaction;
+    const s = state({ kind: 'expense', date: '2026-11-20', description: 'Venta', values: { ...tx.values } });
+    expect(staleValues(s.values, inFields, outFields).map((x) => `${x.field.id}:${x.label}`)).toEqual(['cat:Ventas', 'cli:Al contado']);
+    expect(buildPatch(tx, s, 521_000, outFields, inFields)).toEqual({ kind: 'expense', values: { cat: null, cli: null } });
+    // Una opción que aplica a los dos tipos se conserva; sin el formulario original no se toca nada (compatibilidad).
+    const both = state({ kind: 'expense', date: '2026-11-20', description: 'Venta', values: { ...tx.values, cat: { type: 'list', optionId: 'otros' } } });
+    expect(buildPatch({ ...tx, values: both.values } as Transaction, both, 521_000, outFields, inFields)).toEqual({ kind: 'expense', values: { cli: null } });
+    expect(buildPatch(tx, s, 521_000, outFields)).toEqual({ kind: 'expense' });
+    // Sin cambio de tipo, nada se vacía aunque se pase el formulario original.
+    const same = state({ kind: 'income', date: '2026-11-20', description: 'Venta', values: { ...tx.values } });
+    expect(buildPatch(tx, same, 521_000, inFields, inFields)).toEqual({});
   });
   it('sucio, siguiente y sugerencias', () => {
     const a = state();
@@ -376,5 +436,14 @@ describe('ráfaga', () => {
     const lines = ['a', 'b', 'c', 'd'].map((id, i) => l(id, i + 1));
     expect(tail(lines).map((x) => `${x.line.id}${x.index}`)).toEqual(['d3', 'c2', 'b1']);
     expect(toCaptureRows([l('a', 5)])).toEqual([{ amount: 5, description: 'a' }]);
+  });
+  it('total de control: ilegible bloquea, descuadre o filas con error confirman (I-14)', () => {
+    const control = (text: string) => parseAmountText(text, 'es-DO', 2);
+    expect(controlGate(control('1,500,000 pesos'), null)).toBe('block');
+    expect(controlGate(control('10.999'), null, 2)).toBe('block');
+    expect(controlGate(control(''), null)).toBe('save');
+    expect(controlGate(control(''), null, 1)).toBe('confirm');
+    expect(controlGate(control('1,562.49'), remaining(156_249, 156_249))).toBe('save');
+    expect(controlGate(control('1,500'), remaining(150_000, 156_249))).toBe('confirm');
   });
 });

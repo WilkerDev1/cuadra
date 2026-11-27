@@ -10,7 +10,7 @@ import { getLocale } from '../../../i18n/format';
 import { AccountChip, Button, Chip, Dialog, Field, Input, Segmented } from '../../../ui';
 import { useCurrency, useOptionCounts, useSignedAmount, useToday } from '../hooks';
 import { exprFromMinor, parseAmountText } from '../logic/amount';
-import { removeLine, remaining, sumLines, toCaptureRows, upsertLine, type BurstLine } from '../logic/burst';
+import { controlGate, removeLine, remaining, sumLines, toCaptureRows, upsertLine, type BurstLine } from '../logic/burst';
 import { categoryField, resolveDescription, topOptions, type EntryKind } from '../logic/entry';
 import { AccountPicker } from './AccountPicker';
 import { AmountEntry } from './AmountEntry';
@@ -91,7 +91,22 @@ export function BurstCapture({ initialAccountId, initialKind }: { initialAccount
     setValues(l.values);
   };
 
+  // Un cierre a la vez (doble toque en «Cerrar lote» o en «Cerrar igual»): el ref se marca en el mismo evento.
+  const saving = useRef(false);
+  const tryClose = () => {
+    if (saving.current) return;
+    const gate = controlGate(control, diff);
+    if (gate === 'block') {
+      setPanel('control');
+      setSaveError(t('batch.controlInvalid'));
+      return;
+    }
+    if (gate === 'confirm') setConfirm(true);
+    else void close();
+  };
   const close = async () => {
+    if (saving.current) return;
+    saving.current = true;
     setConfirm(false);
     setSaveError(null);
     try {
@@ -112,6 +127,8 @@ export function BurstCapture({ initialAccountId, initialKind }: { initialAccount
       setDescription('');
     } catch (e) {
       setSaveError(isNotSaved(e) ? t('grid.nothing') : tGlobal('common.error.unknown'));
+    } finally {
+      saving.current = false;
     }
   };
 
@@ -133,7 +150,7 @@ export function BurstCapture({ initialAccountId, initialKind }: { initialAccount
           ]}
         />
         {lines.length === 0 ? null : (
-          <Button variant="ghost" className="cap-burst__close" onClick={() => (diff !== null && diff !== 0 ? setConfirm(true) : void close())} loading={save.isPending}>
+          <Button variant="ghost" className="cap-burst__close" onClick={tryClose} loading={save.isPending}>
             {t('burst.close', { n: lines.length })}
           </Button>
         )}
@@ -184,7 +201,7 @@ export function BurstCapture({ initialAccountId, initialKind }: { initialAccount
             onClick={() => setPanel((p) => (p === 'account' ? null : 'account'))}
           />
           <Chip icon={Target} aria-expanded={panel === 'control'} onClick={() => setPanel((p) => (p === 'control' ? null : 'control'))}>
-            {controlMinor === null ? t('batch.controlShort') : t('batch.controlValue', { amount: money(controlMinor) })}
+            {control.status === 'invalid' ? t('batch.controlBad') : controlMinor === null ? t('batch.controlShort') : t('batch.controlValue', { amount: money(controlMinor) })}
           </Chip>
           {category === undefined
             ? null
@@ -222,7 +239,7 @@ export function BurstCapture({ initialAccountId, initialKind }: { initialAccount
         ) : null}
         {panel === 'control' ? (
           <div className="cap-panel">
-            <Field label={t('batch.control')}>
+            <Field label={t('batch.control')} {...(control.status === 'invalid' ? { error: t('amount.invalid') } : {})}>
               <Input
                 className="num cap-burst__control-input"
                 inputMode="decimal"
@@ -231,7 +248,10 @@ export function BurstCapture({ initialAccountId, initialKind }: { initialAccount
                 autoFocus
                 value={controlText}
                 placeholder={t('batch.controlPlaceholder')}
-                onChange={(e) => setControlText(e.currentTarget.value)}
+                onChange={(e) => {
+                  setControlText(e.currentTarget.value);
+                  setSaveError(null);
+                }}
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
                   e.preventDefault();

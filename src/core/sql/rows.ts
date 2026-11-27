@@ -246,6 +246,11 @@ export function selectColumns(table: keyof typeof COLUMNS, alias?: string): stri
   return COLUMNS[table].map((c) => (alias ? `${alias}.${c}` : c)).join(', ');
 }
 
+/** json_object('col', alias.col, …) con las columnas de la tabla: para leer varias tablas en una consulta. */
+export function jsonObjectSql(table: keyof typeof COLUMNS, alias: string): string {
+  return `json_object(${COLUMNS[table].map((c) => `'${c}', ${alias}.${c}`).join(', ')})`;
+}
+
 /** "INSERT INTO <tabla> (<cols>) VALUES (?, ?, …)" en orden de COLUMNS. */
 export function insertSql(table: keyof typeof COLUMNS): string {
   const cols = COLUMNS[table];
@@ -431,7 +436,7 @@ export function toField(r: FieldRecord, options: readonly FieldOptionRecord[] = 
   };
 }
 
-export function toBatch(r: BatchRecord & { active_count?: SqlValue; voided_count?: SqlValue }): Batch {
+export function toBatch(r: BatchRecord & { active_count?: SqlValue; voided_count?: SqlValue; restorable_count?: SqlValue }): Batch {
   return {
     id: r.id,
     workspaceId: r.workspace_id,
@@ -443,6 +448,7 @@ export function toBatch(r: BatchRecord & { active_count?: SqlValue; voided_count
     createdAt: r.created_at,
     activeCount: num(r.active_count ?? 0),
     voidedCount: num(r.voided_count ?? 0),
+    restorableCount: num(r.restorable_count ?? 0),
   };
 }
 

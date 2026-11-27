@@ -384,9 +384,45 @@
   background: var(--warn-wash);
   color: var(--warn-ink);
 }
+.imp-date {
+  white-space: nowrap;
+}
+.imp-raw {
+  color: var(--ink-3);
+}
+.imp-newval {
+  white-space: nowrap;
+}
+.imp-newtag {
+  display: inline-block;
+  padding-inline: var(--s-1);
+  border: var(--bw) solid var(--rule-strong);
+  border-radius: var(--r-1);
+  color: var(--ink-2);
+  font-size: var(--t-micro);
+  font-weight: var(--w-medium);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: 0.1em;
+}
 .imp-status {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--s-1);
   font-size: var(--t-meta);
   color: var(--ink-3);
+}
+.imp-status svg {
+  flex-shrink: 0;
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+  margin-block-start: 0.15em;
+}
+/* En la tabla ancha el estado corto («Fecha no reconocida») no se parte; apilada, va a la derecha sin mínimo. */
+@container imp (width >= 40rem) {
+  .imp-status > span {
+    min-inline-size: 9rem;
+  }
 }
 .imp-status--error,
 .imp-status--warning {

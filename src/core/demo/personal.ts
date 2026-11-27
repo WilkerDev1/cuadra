@@ -67,7 +67,25 @@ export function planPersonal(opts: PlanOptions): DemoPlan {
   };
   const superKey = (date: IsoDate): string => (date < mergeAt && rng.chance(0.4) ? 'super_economico_dup' : 'super_economico');
 
+  // Un viaje anotado de una vez en la tabla de captura, con su total de control (el día antes, el retiro).
+  const trip = months[Math.max(0, months.length - 4)];
+  const tripDate = trip === undefined ? null : dayIn(trip, 14);
+  const carRepair = dayIn(months[4] ?? start, 18);
+
   for (const date of eachDay(start, anchor)) {
+    if (tripDate !== null && date === addDays(tripDate, -1)) {
+      b.transfer({ from: 'cuenta', to: 'efectivo', amountMinor: rd(14_000), date, description: 'Retiro para el viaje' });
+    }
+    if (date === tripDate) {
+      const rows: DemoRow[] = [
+        { amountMinor: rd(2_400), description: 'Combustible del viaje', values: { categoria: 'transporte', metodo_pago: 'efectivo' } },
+        { amountMinor: rd(6_800), description: 'Cabaña (una noche)', values: { categoria: 'otros_gastos', metodo_pago: 'efectivo' } },
+        { amountMinor: rd(3_150), description: 'Comidas del viaje', values: { categoria: 'restaurantes', metodo_pago: 'efectivo' } },
+        { amountMinor: rd(900), description: 'Entradas al parque nacional', values: { categoria: 'otros_gastos', metodo_pago: 'efectivo' } },
+        { amountMinor: rd(450), description: 'Peaje', values: { categoria: 'transporte', metodo_pago: 'efectivo' } },
+      ];
+      b.capture({ account: 'efectivo', kind: 'expense', date, label: 'Gastos del viaje a la montaña', rows });
+    }
     const dom = dayOfMonth(date);
     const wd = weekday(date);
     const workday = wd >= 1 && wd <= 5;
@@ -100,6 +118,26 @@ export function planPersonal(opts: PlanOptions): DemoPlan {
     if (dom === 9) charge(date, rd(1_500), 'Plan del teléfono', { categoria: 'telefono' });
     if (dom === 11) charge(date, rd(650), 'Plataforma de series', { categoria: 'suscripciones' });
     if (dom === 13) charge(date, rd(1_200), 'Gimnasio (mensualidad)', { categoria: 'salud' });
+    if (dom === 5) {
+      b.tx({ account: 'cuenta', kind: 'expense', amountMinor: rd(9_200), date, description: 'Cuota del préstamo del carro', values: { categoria: 'deudas', metodo_pago: 'transferencia' } });
+    }
+    if (dom === 17) {
+      b.tx({ account: 'cuenta', kind: 'expense', amountMinor: rd(3_000), date, description: 'Ayuda a mamá', values: { categoria: 'regalos_donaciones', metodo_pago: 'transferencia' } });
+    }
+    // Diciembre: regalos y la cena de Nochebuena; enero: la renovación del seguro del carro.
+    if (monthOf(date) === 12 && (dom === 12 || dom === 19 || dom === 22)) {
+      charge(date, rng.rangeMinor(rd(3_500), rd(7_500), rd(50)), 'Regalos de Navidad', { categoria: 'regalos_donaciones', comercio: 'tienda_hogar' });
+    }
+    if (monthOf(date) === 12 && dom === 23) {
+      b.tx({ account: 'cuenta', kind: 'expense', amountMinor: rd(9_800), date, description: 'Compra para la cena de Nochebuena', values: { categoria: 'supermercado', metodo_pago: 'tarjeta_debito', comercio: 'super_economico' } });
+    }
+    // Un imprevisto grande: la caja de cambios del carro (con la tarjeta; se paga el mes siguiente).
+    if (date === carRepair) {
+      charge(date, rd(27_500), 'Reparación del carro (caja de cambios)', { categoria: 'transporte', comercio: 'estacion_combustible', imprevisto: true });
+    }
+    if (monthOf(date) === 1 && dom === 10) {
+      b.tx({ account: 'cuenta', kind: 'expense', amountMinor: rd(16_500), date, description: 'Renovación del seguro del carro', values: { categoria: 'seguro', metodo_pago: 'transferencia' } });
+    }
     if (dom === 22) {
       b.tx({ account: 'cuenta', kind: 'expense', amountMinor: rd(2_850), date, description: 'Seguro médico complementario', values: { categoria: 'seguro', metodo_pago: 'transferencia' } });
     }
@@ -117,7 +155,7 @@ export function planPersonal(opts: PlanOptions): DemoPlan {
 
     // ── Ahorro y movimientos entre cuentas ──
     if (dom === 16 || date === dayIn(date, 30)) {
-      const amount = monthOf(date) === 12 ? rd(15_000) : rd(5_000);
+      const amount = monthOf(date) === 12 ? rd(8_000) : rd(3_000);
       if (b.balanceOf('cuenta') > amount + rd(15_000)) b.transfer({ from: 'cuenta', to: 'ahorros', amountMinor: amount, date, description: 'Ahorro de la quincena' });
     }
     if (dom === 20) {
@@ -137,9 +175,9 @@ export function planPersonal(opts: PlanOptions): DemoPlan {
     if (wd !== 0 && rng.chance(0.65)) {
       cash(date, rng.rangeMinor(rd(150), rd(900), rd(5)), rng.pick(['Colmado', 'Colmado (pan, huevos y café)', 'Colmado (refrescos y picadera)']), { categoria: 'supermercado', comercio: 'colmado_esquina' });
     }
-    if (workday && rng.chance(0.85)) cash(date, rng.pick([rd(70), rd(100), rd(140), rd(200)]), 'Transporte (carro público)', { categoria: 'transporte' });
+    if (workday && rng.chance(0.85)) cash(date, rng.rangeMinor(rd(100), rd(420), rd(5)), 'Transporte del día (carro público y motoconcho)', { categoria: 'transporte' });
     if (workday && rng.chance(0.55)) {
-      const amount = rng.rangeMinor(rd(250), rd(450), rd(25));
+      const amount = rng.rangeMinor(rd(250), rd(450), rd(5));
       if (rng.chance(0.5)) cash(date, amount, 'Almuerzo', { categoria: 'restaurantes', comercio: 'cafeteria_oficina' });
       else b.tx({ account: 'cuenta', kind: 'expense', amountMinor: amount, date, description: 'Almuerzo', values: { categoria: 'restaurantes', metodo_pago: 'tarjeta_debito', comercio: 'cafeteria_oficina' } });
     }
@@ -153,21 +191,11 @@ export function planPersonal(opts: PlanOptions): DemoPlan {
     }
     if (rng.chance(0.02)) charge(date, rng.rangeMinor(rd(1_200), rd(5_500), rd(50)), 'Ropa y calzado', { categoria: 'ropa' });
     if (rng.chance(0.015)) charge(date, rng.rangeMinor(rd(1_500), rd(9_000), rd(50)), 'Reparación en la casa', { categoria: 'hogar', comercio: 'tienda_hogar', imprevisto: true });
-  }
 
-  // Un viaje anotado de una vez en la tabla de captura, con su total de control.
-  const trip = months[Math.max(0, months.length - 4)];
-  if (trip !== undefined) {
-    const date = dayIn(trip, 14);
-    const rows: DemoRow[] = [
-      { amountMinor: rd(2_400), description: 'Combustible del viaje', values: { categoria: 'transporte', metodo_pago: 'efectivo' } },
-      { amountMinor: rd(6_800), description: 'Cabaña (una noche)', values: { categoria: 'otros_gastos', metodo_pago: 'efectivo' } },
-      { amountMinor: rd(3_150), description: 'Comidas del viaje', values: { categoria: 'restaurantes', metodo_pago: 'efectivo' } },
-      { amountMinor: rd(900), description: 'Entradas al parque nacional', values: { categoria: 'otros_gastos', metodo_pago: 'efectivo' } },
-      { amountMinor: rd(450), description: 'Peaje', values: { categoria: 'transporte', metodo_pago: 'efectivo' } },
-    ];
-    b.transfer({ from: 'cuenta', to: 'efectivo', amountMinor: rd(14_000), date: addDays(date, -1), description: 'Retiro para el viaje' });
-    b.capture({ account: 'efectivo', kind: 'expense', date, label: 'Gastos del viaje a la montaña', rows });
+    // Si la cuenta se queda corta antes del próximo salario, se pasa algo de los ahorros.
+    if (b.balanceOf('cuenta') < rd(3_000) && b.balanceOf('ahorros') > rd(20_000)) {
+      b.transfer({ from: 'ahorros', to: 'cuenta', amountMinor: rd(10_000), date, description: 'Traspaso desde los ahorros' });
+    }
   }
 
   // El estado de cuenta de la tarjeta de un mes, importado desde Excel.
@@ -193,7 +221,8 @@ export function planPersonal(opts: PlanOptions): DemoPlan {
     const copy = b.duplicate(dinner, 0);
     if (copy !== null) taken.add(copy);
   }
-  const voids = b.pickTx(rng, 3, () => true, taken);
+  // Solo gastos: anular un salario dejaría la cuenta en negativo (y nadie lo anota dos veces).
+  const voids = b.pickTx(rng, 3, (it) => it.kind === 'expense', taken);
   const reasons = ['Registrado dos veces', 'Monto equivocado', 'Era de la otra cuenta'];
   voids.forEach((it, i) => b.step({ t: 'void', at: addDays(it.date, 2), ref: it.ref as string, reason: reasons[i] as string }));
   const back = voids[0];

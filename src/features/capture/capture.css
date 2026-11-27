@@ -8,7 +8,7 @@
   font-size: var(--t-small); font-weight: var(--w-medium); color: var(--warn-ink);
 }
 .cap-label { font-size: var(--t-small); font-weight: var(--w-medium); color: var(--ink); }
-.cap-group { display: grid; gap: var(--s-2); min-inline-size: 0; }
+.cap-group { display: grid; gap: var(--s-1); min-inline-size: 0; }
 .cap-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; min-inline-size: 0; }
 .cap-chips--scroll {
   flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain;
@@ -239,7 +239,7 @@ button.cap-mini__line[aria-pressed="true"] { background: var(--surface-2); box-s
 .cap-page__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: var(--s-3); }
 
 .cap-bar {
-  display: grid; gap: var(--s-4); align-items: end;
+  display: grid; gap: var(--s-4); align-items: start; /* un error bajo el control no sube su campo */
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
 }
 @container cap-page (width >= 64rem) {
@@ -300,6 +300,15 @@ button.cap-mini__line[aria-pressed="true"] { background: var(--surface-2); box-s
   border-inline-start: var(--bw) solid var(--rule);
 }
 .cap-grid__table thead :is(th.cap-grid__h--amount, th.cap-grid__x) { z-index: calc(var(--z-sticky) + 1); }
+/* Con columnas pasando por debajo, el borde de Monto proyecta una sombra corta hacia ellas */
+.cap-grid[data-under] .cap-grid__table :is(th.cap-grid__h--amount, td.cap-cell--amount)::before {
+  content: ''; position: absolute; inset-block: 0; inset-inline-end: 100%;
+  inline-size: var(--s-3); pointer-events: none;
+  background: linear-gradient(to left, color-mix(in oklch, var(--ink) 14%, transparent), transparent);
+}
+:dir(rtl) .cap-grid[data-under] .cap-grid__table :is(th.cap-grid__h--amount, td.cap-cell--amount)::before {
+  background: linear-gradient(to right, color-mix(in oklch, var(--ink) 14%, transparent), transparent);
+}
 .cap-grid__x .ui-iconbtn { opacity: 0.6; }
 tr:focus-within .cap-grid__x .ui-iconbtn, .cap-grid__x .ui-iconbtn:focus-visible { opacity: 1; }
 @media (hover: hover) { tr:hover .cap-grid__x .ui-iconbtn { opacity: 1; } }

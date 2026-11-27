@@ -13,6 +13,28 @@ export interface SqlExecutor {
   run(sql: string, params?: SqlParams): Promise<{ changes: number }>;
   /** Mismo SQL con muchas filas de parámetros, en una sola ida al worker. */
   runMany(sql: string, rows: readonly SqlParams[]): Promise<{ changes: number }>;
+  /**
+   * Sentencias DISTINTAS en orden, en una sola ida al worker, atómicas (o todas o ninguna). Devuelve las filas
+   * cambiadas por cada una. Opcional: los adaptadores que no lo tienen se sustituyen con `runSeries()` de abajo.
+   */
+  runSeries?(steps: readonly SqlStep[]): Promise<{ changes: number[] }>;
+}
+
+export interface SqlStep {
+  sql: string;
+  params?: SqlParams;
+}
+
+/**
+ * Ejecuta `steps` con `exec.runSeries` si el adaptador lo tiene (una ida) o, si no, una a una. Dentro de una
+ * transacción el resultado es el mismo: si una falla, la transacción entera se deshace.
+ */
+export async function runSeries(exec: SqlExecutor, steps: readonly SqlStep[]): Promise<{ changes: number[] }> {
+  if (steps.length === 0) return { changes: [] };
+  if (exec.runSeries) return exec.runSeries(steps);
+  const changes: number[] = [];
+  for (const s of steps) changes.push((await exec.run(s.sql, s.params)).changes);
+  return { changes };
 }
 
 export interface SqlDriverInfo {

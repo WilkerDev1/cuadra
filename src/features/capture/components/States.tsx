@@ -54,3 +54,9 @@ export function VoidedNotice({ txId }: { txId: string }) {
     />
   );
 }
+
+/** Enlace con un id de otro espacio: no se edita ni se duplica bajo este (DESIGN: un espacio no ve a otro). */
+export function OtherWorkspace() {
+  const t = useT('capture');
+  return <EmptyState message={t('state.otherWorkspace')} />;
+}

@@ -50,7 +50,9 @@ export function WorkspaceSwitcher({ presentation, tone = 'plain' }: { presentati
     close();
     go(`/e/${id}`);
   };
-  const triggerLabel = t('common.switcher.trigger', { name: current?.name ?? t('common.switcher.none') });
+  // Mientras se leen los espacios no se dice «Sin espacio»: eso queda para cuando la lista ya llegó y el id no está.
+  const loading = list.data === undefined && !list.isError;
+  const triggerLabel = loading && current === undefined ? t('common.switcher.triggerLoading') : t('common.switcher.trigger', { name: current?.name ?? t('common.switcher.none') });
 
   const body = (
     <div className="switcher">
@@ -96,16 +98,18 @@ export function WorkspaceSwitcher({ presentation, tone = 'plain' }: { presentati
                 <span className="switcher__text">
                   <span className="switcher__name">{ws.name}</span>
                   <span className="switcher__meta">
-                    {ws.lastMovementDate === null
-                      ? t('common.switcher.accounts', { n: ws.accountCount })
-                      : t('common.switcher.last', { when: formatRelativeDay(ws.lastMovementDate, today) })}
+                    {ws.isDemo ? <Chip variant="info">{t('common.switcher.demo')}</Chip> : null}
+                    <span className="switcher__when">
+                      {ws.lastMovementDate === null
+                        ? t('common.switcher.accounts', { n: ws.accountCount })
+                        : t('common.switcher.last', { when: formatRelativeDay(ws.lastMovementDate, today) })}
+                    </span>
                   </span>
                 </span>
                 <span className="switcher__figure">
                   <span className="switcher__balance num" data-amount>
                     {Money.format(ws.balanceMinor, { locale: getLocale(), currency: ws.currency })}
                   </span>
-                  {ws.isDemo ? <Chip variant="info">{t('common.switcher.demo')}</Chip> : null}
                 </span>
               </button>
             </li>
@@ -140,7 +144,11 @@ export function WorkspaceSwitcher({ presentation, tone = 'plain' }: { presentati
       ) : (
         <Spine ws={current} />
       )}
-      <span className="ws-trigger__name">{current?.name ?? t('common.switcher.none')}</span>
+      {current === undefined && loading ? (
+        <span className="ws-trigger__name ws-trigger__name--loading" aria-hidden />
+      ) : (
+        <span className="ws-trigger__name">{current?.name ?? t('common.switcher.none')}</span>
+      )}
       <ChevronsUpDown aria-hidden className="ws-trigger__caret" />
     </button>
   );

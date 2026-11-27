@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useLocation, useMatches, useNavigate, useOutlet, useParams } from 'react-router';
+import { Link, useBlocker, useLocation, useMatches, useNavigate, useOutlet, useParams, type BlockerFunction } from 'react-router';
 import { useT } from '../../i18n';
+import { Dialog } from '../../ui';
 import { useWorkspace } from '../data/hooks';
 import { useWorkspaceIndexRoute } from '../registry/hooks';
 import { InspectorContext, InspectorPanel } from '../registry/inspector';
@@ -11,9 +12,10 @@ import { useUiStore } from '../state/uiStore';
 import { BottomTabs } from './BottomTabs';
 import { ShellBanners } from './ShellBanners';
 import { ShellChrome } from './ShellChrome';
+import { SkipLink } from './SkipLink';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
-import { useRouteEffects } from './useRouteEffects';
+import { useDocumentTitle, useRouteEffects } from './useRouteEffects';
 import './shell.css';
 
 interface Background {
@@ -64,14 +66,12 @@ export function AppShell() {
     if (loadedId !== undefined) setLast(loadedId);
   }, [loadedId, setLast]);
 
-  useRouteEffects(main, { enabled: !isSheet, titleKey: handle?.titleKey });
+  useRouteEffects(main, { enabled: !isSheet, titleKey: missing ? 'common.wsMissing.title' : handle?.titleKey });
 
   return (
     <InspectorContext.Provider value={inspector}>
       <div className="shell" data-inspector={claims > 0 ? '' : undefined}>
-        <a className="skip-link" href="#main">
-          {t('common.skipToContent')}
-        </a>
+        <SkipLink target={main} />
         <TopBar />
         <Sidebar />
         <main id="main" ref={main} className="shell-main">
@@ -144,16 +144,36 @@ function RouteSheet({
 }) {
   const t = useT();
   const navigate = useNavigate();
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirtyState] = useState(false);
   const [title, setTitle] = useState<string | null>(null);
   const { mode } = useContext(InspectorContext);
+  // El bloqueador lee refs: `setDirty(false)` seguido de `navigate()` en el mismo tic (guardar y seguir) no debe preguntar.
+  const dirtyRef = useRef(false);
+  const leaving = useRef(false);
+  const setDirty = useCallback((value: boolean) => {
+    dirtyRef.current = value;
+    setDirtyState(value);
+  }, []);
 
   const close = useCallback(() => {
+    // Cerrar desde la hoja (×, Esc, «Descartar» o tras guardar) ya resolvió los cambios: no se vuelve a preguntar.
+    leaving.current = true;
     const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
     if (to !== null && idx > 0) void navigate(-1);
     else void navigate(to ?? `/e/${wsId}`, { replace: true });
   }, [navigate, to, wsId]);
-  const api = useMemo<SheetApi>(() => ({ mode, close, setDirty, setTitle }), [mode, close]);
+  const api = useMemo<SheetApi>(() => ({ mode, close, setDirty, setTitle }), [mode, close, setDirty]);
+
+  // Salir de la hoja con cambios sin guardar por otro camino (selector de espacios, barra lateral, Atrás del
+  // navegador) pregunta como lo hace la ×. Cambiar solo la búsqueda (?tipo=…) no sale de la hoja.
+  const shouldBlock = useCallback<BlockerFunction>(
+    ({ currentLocation, nextLocation }) => dirtyRef.current && !leaving.current && currentLocation.pathname !== nextLocation.pathname,
+    [],
+  );
+  const blocker = useBlocker(shouldBlock);
+  const shownTitle = title ?? t(titleKey ?? 'common.sheet.default');
+  // La página de detrás no cambia, pero la pestaña dice lo que está abierto («Nuevo movimiento · Cuadra»).
+  useDocumentTitle(shownTitle);
 
   // Al cerrar una hoja el foco vuelve a lo que la abrió (el unmount no lo hace solo).
   const opener = useRef<Element | null>(document.activeElement);
@@ -167,9 +187,22 @@ function RouteSheet({
 
   return (
     <SheetContext.Provider value={api}>
-      <InspectorPanel title={title ?? t(titleKey ?? 'common.sheet.default')} onClose={close} dirty={dirty} height={height}>
+      <InspectorPanel title={shownTitle} onClose={close} dirty={dirty} height={height}>
         {children}
       </InspectorPanel>
+      <Dialog
+        open={blocker.state === 'blocked'}
+        variant="destructive"
+        title={t('ui.unsaved.title')}
+        description={t('ui.unsaved.body')}
+        confirmLabel={t('ui.unsaved.discard')}
+        cancelLabel={t('ui.unsaved.keep')}
+        onClose={() => blocker.reset?.()}
+        onConfirm={() => {
+          leaving.current = true;
+          blocker.proceed?.();
+        }}
+      />
     </SheetContext.Provider>
   );
 }

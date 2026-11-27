@@ -122,6 +122,23 @@ describe('wasmDriver ↔ workerHost (sqlite-wasm real)', () => {
     ).rejects.toThrow('no');
     expect(await driver.runMany('INSERT INTO t (label) VALUES (?)', [['a'], ['b']])).toEqual({ changes: 2 });
     await expect(driver.runMany('INSERT INTO t (label) VALUES (?)', [['c'], ['a']])).rejects.toBeInstanceOf(SqlError);
+    // runSeries: sentencias distintas en orden y en un viaje; atómico.
+    await expect(
+      driver.runSeries!([
+        { sql: 'INSERT INTO t (label) VALUES (?)', params: ['s1'] },
+        { sql: 'INSERT INTO t (label) VALUES (?)', params: ['a'] },
+      ]),
+    ).rejects.toBeInstanceOf(SqlError);
+    expect(
+      await driver.transaction((tx) =>
+        tx.runSeries!([
+          { sql: 'INSERT INTO t (label) VALUES (?)', params: ['s2'] },
+          { sql: "UPDATE t SET label = 's3' WHERE label = ?", params: ['s2'] },
+          { sql: 'INSERT INTO t (label) VALUES (?)', params: ['s2'] },
+        ]),
+      ),
+    ).toEqual({ changes: [1, 1, 1] });
+    await driver.run("DELETE FROM t WHERE label IN ('s2', 's3')");
     await driver.run('INSERT INTO t (label, data) VALUES ($l, $d)', { l: 'bin', d: new Uint8Array([9, 8]) });
     expect(await driver.all('SELECT label FROM t ORDER BY label')).toEqual([{ label: 'a' }, { label: 'b' }, { label: 'bin' }]);
     expect((await driver.get("SELECT data FROM t WHERE label = 'bin'"))!['data']).toEqual(new Uint8Array([9, 8]));
@@ -161,6 +178,38 @@ describe('wasmDriver ↔ workerHost (sqlite-wasm real)', () => {
     await driver.flush();
     const restored = await memoryDriver(store);
     expect(await restored.all('SELECT a FROM t')).toEqual([{ a: 1 }]);
+  });
+
+  it('memory-idb: una lectura en transacción (readTx) no vuelca la base; una escritura sí', async () => {
+    const inner = createMemoryByteStore();
+    let puts = 0;
+    const store: ByteStore = {
+      get: (k) => inner.get(k),
+      put: async (k, v) => {
+        puts++;
+        await inner.put(k, v);
+      },
+      delete: (k) => inner.delete(k),
+      keys: () => inner.keys(),
+    };
+    const driver = await memoryDriver(store);
+    await migrate(driver);
+    await driver.flush();
+    const base = puts;
+    expect(base).toBeGreaterThan(0);
+    for (let i = 0; i < 3; i++) {
+      await driver.transaction(async (tx) => {
+        await tx.get('SELECT COUNT(*) AS n FROM settings');
+        await tx.all('SELECT key FROM settings');
+      });
+      await driver.run('SELECT 1');
+    }
+    await new Promise((r) => setTimeout(r, 40)); // persistDelayMs = 5
+    await driver.flush();
+    expect(puts).toBe(base);
+    // Una escritura real sí programa el volcado.
+    await driver.transaction((tx) => tx.run("INSERT INTO settings (scope_id, key, value, updated_at) VALUES ('', 'k', '1', 't')"));
+    await waitFor(async () => puts > base);
   });
 
   it('sin IndexedDB: :memory: puro con persistent=false', async () => {
@@ -237,11 +286,19 @@ describe('openDatabase', () => {
     expect(await second.get("SELECT value FROM settings WHERE key = 'who'")).toEqual({ value: '"first"' });
   });
 
-  it('escritorio detectado sin driver de Tauri → DataError tauri_driver_pending', async () => {
-    await expect(openDatabase({}, { ...deps(createMemoryByteStore()), isTauri: () => true })).rejects.toMatchObject({
-      name: 'DataError',
-      code: 'tauri_driver_pending',
-    });
+  it('escritorio detectado → va al driver de Tauri y nunca cae a WASM (aquí falla: no hay runtime de Tauri)', async () => {
+    let wasmTried = false;
+    const store = createMemoryByteStore();
+    const base = deps(store);
+    const spawnWorker = () => {
+      wasmTried = true;
+      return fakeWorker(store);
+    };
+    const attempt = openDatabase({}, { ...base, isTauri: () => true, spawnWorker });
+    const error = await attempt.then(() => null, (e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toMatchObject({ code: 'tauri_driver_pending' });
+    expect(wasmTried).toBe(false);
   });
 
   it('una BD de una versión más nueva no se toca: db_from_newer_version', async () => {

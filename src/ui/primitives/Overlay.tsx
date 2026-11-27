@@ -9,16 +9,41 @@ function useModal(open: boolean, onRequestClose: () => void) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeRef = useRef(onRequestClose);
   closeRef.current = onRequestClose;
+  /** Quién tenía el foco al abrir: si el diálogo se desmonta sin `close()`, el navegador no restaura el foco solo. */
+  const opener = useRef<HTMLElement | null>(open && typeof document !== 'undefined' && document.activeElement instanceof HTMLElement ? document.activeElement : null);
   useEffect(() => {
     const el = ref.current;
     if (el === null) return;
-    if (open && !el.open) el.showModal();
-    else if (!open && el.open) void closeTopLayer(el);
+    if (open && !el.open) {
+      if (opener.current === null && document.activeElement instanceof HTMLElement) opener.current = document.activeElement;
+      el.showModal();
+    } else if (!open) {
+      opener.current = null;
+      if (el.open) void closeTopLayer(el);
+    }
   }, [open]);
+  useEffect(
+    () => () => {
+      const back = opener.current;
+      if (back === null || !back.isConnected) return;
+      const active = document.activeElement;
+      if (active === null || active === document.body) back.focus({ preventScroll: true });
+    },
+    [],
+  );
   useEffect(() => {
     const el = ref.current;
     if (el === null) return;
-    return lightDismissFallback(el, () => closeRef.current());
+    // Esc cierra solo este diálogo: que el atajo de cerrar de la pantalla de debajo no lo reciba también.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') e.stopPropagation();
+    };
+    el.addEventListener('keydown', onKey);
+    const off = lightDismissFallback(el, () => closeRef.current());
+    return () => {
+      el.removeEventListener('keydown', onKey);
+      off();
+    };
   }, []);
   return ref;
 }

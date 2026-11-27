@@ -72,15 +72,16 @@ export interface TemplateKeyMap {
 
 // ── Periodos ─────────────────────────────────────────────────────────────────────────
 
+// Mismos términos que el selector de periodo (i18n ui.period.*): «anterior», no «pasado».
 const PRESET_NAMES: Record<PeriodPreset, string> = {
   today: 'Hoy',
   this_week: 'Esta semana',
   this_month: 'Este mes',
-  last_month: 'Mes pasado',
+  last_month: 'Mes anterior',
   this_quarter: 'Este trimestre',
-  last_quarter: 'Trimestre pasado',
+  last_quarter: 'Trimestre anterior',
   this_year: 'Este año',
-  last_year: 'Año pasado',
+  last_year: 'Año anterior',
   last_30_days: 'Últimos 30 días',
   last_12_months: 'Últimos 12 meses',
   all: 'Todo',
@@ -257,12 +258,24 @@ class WarningSink {
   }
 }
 
+/**
+ * Revisa las condiciones por campo. Regla: **nunca ensanchar un filtro en silencio**. Una condición sobre
+ * algo que ya no existe se conserva (con su aviso) en vez de quitarse: un campo o una opción borrados no
+ * tienen valores (solo se borran si nunca se usaron), así que la condición casa con lo mismo que casaría
+ * hoy —con nada en `any_of`— y la vista muestra 0 en lugar de todo el espacio.
+ */
 function validateFilter(filter: TxFilter, byId: Map<Id, Field>, sink: WarningSink): TxFilter {
   if (filter.fields === undefined) return filter;
   const fields: FieldCondition[] = [];
   for (const cond of filter.fields) {
     const field = byId.get(cond.fieldId);
-    if (field === undefined || !OPS_BY_TYPE[field.type].has(cond.op)) {
+    if (field === undefined) {
+      sink.add({ code: 'field_missing', fieldKeyOrId: cond.fieldId });
+      fields.push(cond);
+      continue;
+    }
+    if (!OPS_BY_TYPE[field.type].has(cond.op)) {
+      // Forma imposible por la interfaz (el tipo de un campo no cambia): receta dañada, se descarta.
       sink.add({ code: 'field_missing', fieldKeyOrId: cond.fieldId });
       continue;
     }
@@ -280,14 +293,20 @@ function validateFilter(filter: TxFilter, byId: Map<Id, Field>, sink: WarningSin
         return current;
       };
       const optionIds: Id[] = [];
+      const missing: Id[] = [];
       for (const id of cond.optionIds) {
-        if (!options.has(id)) continue;
+        if (!options.has(id)) {
+          sink.add({ code: 'option_missing', fieldId: field.id, optionId: id });
+          if (!missing.includes(id)) missing.push(id);
+          continue;
+        }
         if (options.get(id)?.active === false) sink.add({ code: 'option_inactive', fieldId: field.id, optionId: id });
         const final = target(id);
         if (!optionIds.includes(final)) optionIds.push(final);
       }
-      if (optionIds.length === 0 && cond.optionIds.length > 0) continue;
-      fields.push({ ...cond, optionIds });
+      // Si quedan opciones vivas, las borradas no cambian el resultado (OR de algo que no casa). Si no
+      // queda ninguna, se conservan los ids borrados: `optionIds: []` significaría "sin restricción".
+      fields.push({ ...cond, optionIds: optionIds.length > 0 ? optionIds : missing });
     } else {
       fields.push(cond);
     }

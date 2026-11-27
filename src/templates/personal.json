@@ -113,7 +113,7 @@
     },
     {
       "key": "resumen_mes",
-      "name": "Resumen del mes pasado",
+      "name": "Resumen del mes anterior",
       "kind": "report",
       "recipe": {
         "v": 1,

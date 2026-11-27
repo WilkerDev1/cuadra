@@ -1,6 +1,8 @@
 // Importación tabular (CSV y Excel) — ARCHITECTURE.md 3.5, pruebas 95–103. Los datos previos se siembran
 // con SQL directo; el commit usa transactions.createMany (2A) y la anulación del lote usa batches (2A).
+import Papa from 'papaparse';
 import { afterEach, describe, expect, it } from 'vitest';
+import { sheetToRows, type Sheet } from '../export/tabular';
 import { createTestCuadra, type TestCuadra } from '../../test/harness';
 import { createEventBus, type ChangeEvent } from '../events';
 import type { SqlExecutor } from '../ports';
@@ -181,6 +183,17 @@ describe('importCsv: lectura de archivos', () => {
     expect(t.rows[0]![0]).toBeInstanceOf(Date);
   });
 
+  it('archivos con más de 120 000 filas no desbordan la pila', () => {
+    const lines = ['Fecha,Concepto,Monto'];
+    for (let i = 0; i < 130_000; i++) lines.push(`01/05/2026,Venta ${i},${(i % 900) + 1}.50`);
+    const t = parseCsvText(lines.join('\n'));
+    expect(t.rows).toHaveLength(130_000);
+    expect(t.headers).toEqual(['Fecha', 'Concepto', 'Monto']);
+    const x = tableFromRows([['Fecha', 'Monto'], ...Array.from({ length: 130_000 }, (_, i) => [i, i, i])]);
+    expect(x.headers).toEqual(['Fecha', 'Monto', '']);
+    expect(x.rows).toHaveLength(130_000);
+  });
+
   it('parseDateCell entiende d/m/a, a-m-d, serial de Excel, Date, meses en texto y años de dos cifras', () => {
     expect(parseDateCell('15/03/2026', 'dd/MM/yyyy')).toBe('2026-03-15');
     expect(parseDateCell('5-3-2026', 'dd-MM-yyyy')).toBe('2026-03-05');
@@ -290,6 +303,53 @@ describe('importCsv: mapeo', () => {
   });
 });
 
+describe('importCsv: ida y vuelta con la exportación CSV', () => {
+  it('quita el apóstrofo de csvSafeText: textos con - + = @ vuelven tal cual y las opciones no se duplican', async () => {
+    const { imp } = await setup();
+    const sheet: Sheet = {
+      name: 'Movimientos',
+      columns: [
+        { key: 'date', header: 'Fecha', type: 'date' },
+        { key: 'description', header: 'Descripción', type: 'text' },
+        { key: 'amount', header: 'Monto', type: 'money' },
+        { key: 'cat', header: 'Categoría', type: 'text' },
+        { key: 'ref', header: 'Referencia', type: 'text' },
+      ],
+      rows: [
+        ['2026-06-01', '-Devolución', -5000, '-Otros', '+1 809 555 0100'],
+        ['2026-06-02', '=Venta', 12000, 'Ventas', '@caja'],
+      ],
+    };
+    const csv = `\uFEFF${Papa.unparse(sheetToRows(sheet), { newline: '\r\n' })}`;
+    expect(csv).toContain("'-Devolución");
+    const raw = parseCsvText(csv);
+    expect(raw.rows).toEqual([
+      ['2026-06-01', '-Devolución', '-50.00', '-Otros', '+1 809 555 0100'],
+      ['2026-06-02', '=Venta', '120.00', 'Ventas', '@caja'],
+    ]);
+    const p = await imp.preview(S.ws, S.cash, raw, base({
+      date: { column: 0, format: 'yyyy-MM-dd' },
+      fields: { [S.fCat]: { column: 3 }, [S.fRef]: { column: 4 } },
+    }));
+    expect(p.rows.map((r) => r.draft?.description)).toEqual(['-Devolución', '=Venta']);
+    expect(p.rows[0]!.draft?.values?.[S.fRef]).toEqual({ type: 'text', value: '+1 809 555 0100' });
+    expect(p.newOptions.map((o) => o.label)).toEqual(['-Otros']);
+  });
+
+  it('templateCsv protege los nombres de campo contra fórmulas y suggestMapping los sigue reconociendo', async () => {
+    const { imp } = await setup();
+    await h!.driver.run('UPDATE fields SET label = ? WHERE id = ?', ['=HYPERLINK("https://example.invalid","Ver")', S.fRef]);
+    const csv = await imp.templateCsv(S.ws);
+    const header = csv.replace(/^\uFEFF/, '').split('\r\n')[0]!;
+    expect(header).toContain('"\'=HYPERLINK(""https://example.invalid"",""Ver"")"');
+    for (const cell of Papa.parse<string[]>(header).data[0]!) expect(cell).not.toMatch(/^[=+\-@\t\r]/);
+    const raw = parseCsvText(csv);
+    expect(raw.headers).toContain('=HYPERLINK("https://example.invalid","Ver")');
+    const fields = FIELDS.map((f) => (f.id === S.fRef ? { ...f, label: '=HYPERLINK("https://example.invalid","Ver")' } : f));
+    expect(imp.suggestMapping(raw, fields).fields).toMatchObject({ [S.fRef]: { column: raw.headers.indexOf('=HYPERLINK("https://example.invalid","Ver")') } });
+  });
+});
+
 describe('importCsv: vista previa', () => {
   it('preview lee fechas dd/MM/yyyy y montos "1.234,50" según el formato elegido', async () => {
     const { imp } = await setup();
@@ -366,6 +426,9 @@ describe('importCsv: vista previa', () => {
     ]);
     expect(p.rows[7]!.draft?.accountId).toBe(S.bank);
     expect(p.rows.filter((r) => r.skipByDefault).length).toBe(8);
+    // Una descripción de más de 200 caracteres es error de fila (no rompe el lote al confirmar).
+    const long = await imp.preview(S.ws, S.cash, table(['Fecha', 'Concepto', 'Monto', 'Cuenta'], [['01/02/2026', 'x'.repeat(201), '10.00', '']]), base({}));
+    expect(long.rows.map((r) => [r.status, r.issues])).toEqual([['error', ['text_too_long']]]);
     expect(p.rows[0]!.raw).toEqual(['32/01/2026', 'Fecha imposible', '10.00', '']);
     expect(await counts()).toEqual(before);
     expect(events).toEqual([]);

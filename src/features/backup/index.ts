@@ -1,5 +1,5 @@
 // Feature `backup` (P-14 Respaldo, P-15 Ajustes de instalación, Plantillas). Liviano: solo descriptores.
-import { LayoutTemplate, Save, Settings } from 'lucide-react';
+import { LayoutTemplate, Save, SlidersHorizontal } from 'lucide-react';
 import type { FeatureModule } from '../../app/registry/types';
 
 export const feature: FeatureModule = {
@@ -13,7 +13,7 @@ export const feature: FeatureModule = {
   nav: [
     { id: 'backup', scope: 'root', to: 'respaldo', labelKey: 'backup.nav', icon: Save, placement: 'more', group: 'config', order: 80 },
     { id: 'templates', scope: 'root', to: 'plantillas', labelKey: 'backup.templates.nav', icon: LayoutTemplate, placement: 'more', group: 'config', order: 85 },
-    { id: 'install-settings', scope: 'root', to: 'ajustes', labelKey: 'backup.settings.nav', icon: Settings, placement: 'settings', group: 'app', order: 90 },
+    { id: 'install-settings', scope: 'root', to: 'ajustes', labelKey: 'backup.settings.nav', icon: SlidersHorizontal, placement: 'settings', group: 'app', order: 90 },
   ],
   settingsSections: [
     { id: 'backup-backup', scope: 'root', labelKey: 'backup.nav', icon: Save, to: 'respaldo', order: 80 },

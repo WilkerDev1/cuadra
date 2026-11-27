@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import type { ColumnMapping, ImportPreviewRow, RawTable } from '../../core';
+import type { Account, ColumnMapping, Field, ImportPreviewRow, RawTable } from '../../core';
 import {
   assignTarget,
   baseName,
   canInclude,
   cellText,
   defaultInclude,
+  displayDate,
+  extraCell,
+  extraColumns,
   distinctValues,
   filterRows,
   flaggedColumns,
   issueColumn,
   mappingFromTargets,
+  rawAmount,
   rowDisplay,
   sampleValues,
   summarize,
@@ -146,14 +150,81 @@ describe('vista previa', () => {
     expect(issueColumn('unparseable_date')).toBe('date');
     expect(issueColumn('not_a_number')).toBe('amount');
     expect(issueColumn('description_required')).toBe('description');
-    expect(issueColumn('unknown_account')).toBe('status');
+    expect(issueColumn('unknown_account')).toBe('account');
+    expect(issueColumn('possible_duplicate')).toBe('status');
     expect([...flaggedColumns(rows[3] as ImportPreviewRow)]).toEqual(['date']);
     expect([...flaggedColumns(rows[5] as ImportPreviewRow)]).toEqual([]);
   });
   it('muestra el crudo cuando la fila no se pudo leer', () => {
     const m: ColumnMapping = { date: { column: 0, format: 'auto' }, amount: { mode: 'signed', column: 2 }, amountLocale: 'auto', description: { column: 1 }, fields: {}, createMissingOptions: true };
-    expect(rowDisplay(rows[3] as ImportPreviewRow, m)).toEqual({ date: '2026-11-01', description: 'desc' });
-    expect(rowDisplay(rows[0] as ImportPreviewRow, m)).toEqual({ date: '2026-11-01', description: 'd' });
+    expect(rowDisplay(rows[3] as ImportPreviewRow, m)).toMatchObject({ date: '2026-11-01', description: 'desc' });
+    expect(rowDisplay(rows[0] as ImportPreviewRow, m)).toMatchObject({ date: '2026-11-01', description: 'd' });
     expect(rowDisplay(rows[3] as ImportPreviewRow, { ...m, description: { fixed: 'Fijo' } }).description).toBe('Fijo');
+  });
+});
+
+describe('filas con error: los demás valores se siguen viendo', () => {
+  const m: ColumnMapping = {
+    date: { column: 0, format: 'auto' },
+    amount: { mode: 'signed', column: 2 },
+    amountLocale: 'auto',
+    description: { column: 1 },
+    account: { column: 4 },
+    fields: { cat: { column: 3 } },
+    createMissingOptions: true,
+  };
+  const bad = (raw: string[], extra: Partial<ImportPreviewRow> = {}): ImportPreviewRow => ({
+    index: 0,
+    status: 'error',
+    skipByDefault: true,
+    draft: null,
+    opening: null,
+    issues: ['not_a_number'],
+    pendingOptions: [],
+    duplicateOf: null,
+    raw,
+    ...extra,
+  });
+
+  it('fecha del archivo con el formato resuelto; el 31/02 no existe y queda cruda', () => {
+    expect(displayDate('08/11/2026', 'dd/MM/yyyy')).toBe('2026-11-08');
+    expect(displayDate('11/08/2026', 'MM/dd/yyyy')).toBe('2026-11-08');
+    expect(displayDate('8-11-26', 'd/M/yy')).toBe('2026-11-08');
+    expect(displayDate('2026-11-08 10:30', 'dd/MM/yyyy')).toBe('2026-11-08');
+    expect(displayDate('46334', 'excel_serial')).toBe('2026-11-08');
+    expect(displayDate('31/02/2026', 'dd/MM/yyyy')).toBeNull();
+    expect(displayDate('ayer', 'dd/MM/yyyy')).toBeNull();
+    const r = bad(['08/11/2026', 'Pan', 'abc', '', '']);
+    expect(rowDisplay(r, m, 'dd/MM/yyyy')).toEqual({ date: '2026-11-08', dateRaw: '08/11/2026', description: 'Pan' });
+    expect(rowDisplay(bad(['31/02/2026', 'Pan', '1', '', '']), m, 'dd/MM/yyyy').date).toBe('31/02/2026');
+  });
+
+  it('monto crudo en su columna', () => {
+    expect(rawAmount(bad(['31/02/2026', 'x', '12,750.50']), m)).toEqual({ side: 'in', text: '12,750.50' });
+    expect(rawAmount(bad(['', 'x', '-300']), m)).toEqual({ side: 'out', text: '-300' });
+    expect(rawAmount(bad(['', 'x', '']), m)).toBeNull();
+    expect(rawAmount(bad(['', '', '50']), { ...m, amount: { mode: 'split', inColumn: 1, outColumn: 2 } })).toEqual({ side: 'out', text: '50' });
+    expect(rawAmount(bad(['', 'Débito', '50']), { ...m, amount: { mode: 'with_type', column: 2, typeColumn: 1, inValues: ['crédito'] } })).toEqual({ side: 'out', text: '50' });
+  });
+
+  it('cuenta y campos asignados: valor interpretado, opción nueva o texto crudo', () => {
+    const cat = { id: 'cat', label: 'Categoría', type: 'list', options: [{ id: 'o1', label: 'Ventas' }] } as unknown as Field;
+    const accounts = [{ id: 'a1', name: 'Banco' }] as unknown as Account[];
+    const cols = extraColumns(m, [cat]);
+    expect(cols.map((c) => c.key)).toEqual(['field:cat', 'account']);
+    const [catCol, accCol] = cols as [(typeof cols)[number], (typeof cols)[number]];
+    const ok = bad(['2026-11-08', 'x', '1', 'ventas', 'banco'], {
+      status: 'ok',
+      issues: [],
+      draft: { accountId: 'a1', kind: 'income', amountMinor: 100, date: '2026-11-08', description: 'x', values: { cat: { type: 'list', optionId: 'o1' } } },
+    });
+    expect(extraCell(ok, accCol, accounts)).toEqual({ kind: 'text', text: 'Banco' });
+    expect(extraCell(ok, catCol, accounts)).toEqual({ kind: 'text', text: 'Ventas' });
+    const nueva = { ...ok, pendingOptions: [{ fieldId: 'cat', label: 'Categoría nueva X' }] };
+    expect(extraCell(nueva, catCol, accounts)).toEqual({ kind: 'new', text: 'Categoría nueva X' });
+    const err = bad(['31/02/2026', 'x', '1', 'Ventas', 'Banco']);
+    expect(extraCell(err, accCol, accounts)).toEqual({ kind: 'raw', text: 'Banco' });
+    expect(extraCell(err, catCol, accounts)).toEqual({ kind: 'raw', text: 'Ventas' });
+    expect(extraCell(bad(['', '', '', '', '']), catCol, accounts)).toEqual({ kind: 'empty' });
   });
 });

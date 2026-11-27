@@ -416,6 +416,19 @@
   padding: 0;
   border: 0;
 }
+@container lgt (width < 820px) {
+  /* Clase expandida con la barra lateral (≈ 712px a 1024px): la tabla tiene que caber sin desplazar la página. */
+  .lg-t td {
+    max-inline-size: 9rem;
+  }
+  .lg-t td.lg-t__concept {
+    min-inline-size: 8rem;
+  }
+  .lg-t thead th.lg-t__money {
+    white-space: normal;
+    min-inline-size: 5rem;
+  }
+}
 .lg-void {
   margin-inline-start: var(--s-2);
   font-size: var(--t-micro);
@@ -609,9 +622,42 @@
   gap: var(--s-2);
 }
 
-/* ── Filas del libro: el botón ⋯ nunca encoge, así los montos de todas las filas quedan en la misma columna ── */
-.lg-item .ui-row__more {
-  flex-shrink: 0;
+/* ── Página Lotes ──────────────────────────────────────────────── */
+.lg-batches__ok {
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+}
+.lg-batches__warn {
+  color: var(--warn-ink);
+  font-weight: var(--w-medium);
+}
+.lg-batches__warn .ui-amount {
+  color: var(--warn-ink);
+}
+.lg-batches__more {
+  display: flex;
+  justify-content: center;
+  padding-block: var(--s-4);
+}
+/* Con ratón la fila mide 40px: título y meta, y monto y cuadre, van en una sola línea (DESIGN §Ledger list). */
+@container lg (width >= 600px) {
+  .lg-batches .ui-row__text,
+  .lg-batches .ui-row__trail {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--s-3);
+  }
+  .lg-batches .ui-row__title {
+    flex: 0 1 auto;
+    min-inline-size: 6rem;
+  }
+  .lg-batches .ui-row__meta {
+    flex: 1 1 0;
+    min-inline-size: 0;
+  }
+  .lg-batches .ui-row__trail-meta {
+    order: -1;
+  }
 }
 
 /* ── Compacta: búsqueda a lo ancho, chips y exportar en una fila, totales en una franja, lista a sangre ── */

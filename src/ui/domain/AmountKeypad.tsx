@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { forwardRef, useId, useImperativeHandle, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Delete, Plus } from 'lucide-react';
 import type { Currency, Minor, TxKind } from '../../core/types';
 import { useT } from '../../i18n';
@@ -6,6 +6,7 @@ import { getLocale } from '../../i18n/format';
 import { cx, vibrate } from '../lib';
 import { AmountText, DEFAULT_CURRENCY } from './AmountText';
 import { appendKey, evaluateExpression, formatExpression, localeSeparators, sanitizePastedAmount, type KeypadKey } from './amountLogic';
+import { pastedAmountExpr } from './amountText';
 import { KIND_TONE } from './Marks';
 
 export interface AmountKeypadHandle {
@@ -82,18 +83,18 @@ export const AmountKeypad = forwardRef<AmountKeypadHandle, AmountKeypadProps>(fu
   const hintId = useId();
   const msgId = useId();
   const [inner, setInner] = useState('');
+  /** El campo oculto es de texto y siempre cumple :focus-visible; el anillo solo se dibuja si la última interacción fue de teclado. */
+  const [byKeyboard, setByKeyboard] = useState(() => typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches);
   const expr = expression ?? inner;
-  const [lastValid, setLastValid] = useState<Minor>(0);
   const [shake, setShake] = useState(0);
   const [zeroMsg, setZeroMsg] = useState(false);
   const holdTimer = useRef<number | undefined>(undefined);
   const pointerFired = useRef(false);
 
   const result = evaluateExpression(expr, digits);
-  const minor = result.ok ? result.minor : lastValid;
-  useEffect(() => {
-    if (result.ok) setLastValid(result.minor);
-  }, [result.ok, result.ok ? result.minor : 0]);
+  /** Con una expresión inválida (negativa, enorme) no hay monto: nunca se guarda ni se muestra el último resultado válido. */
+  const failure = result.ok ? null : result.reason;
+  const minor = result.ok ? result.minor : 0;
 
   const update = (next: string) => {
     if (expression === undefined) setInner(next);
@@ -109,7 +110,7 @@ export const AmountKeypad = forwardRef<AmountKeypadHandle, AmountKeypadProps>(fu
 
   const submit = (another: boolean) => {
     if (busy) return;
-    if (minor <= 0) {
+    if (failure !== null || minor <= 0) {
       setShake((n) => n + 1);
       setZeroMsg(true);
       vibrate([10, 30, 10]);
@@ -185,10 +186,17 @@ export const AmountKeypad = forwardRef<AmountKeypadHandle, AmountKeypadProps>(fu
   ];
   const label2 = submitLabel ?? t(`ui.keypad.submit.${kind}`);
   const showAnother = variant === 'amount' && onAnother !== undefined;
+  const msgText = failure === 'negative' || failure === 'too_large' ? t(`ui.keypad.error.${failure}`) : zeroMsg ? t(failure === 'invalid' ? 'ui.keypad.error.invalid' : 'ui.keypad.zero') : '';
   const hasOps = /[+\-*]/.test(expr);
 
   return (
-    <div className={cx('ui-keypad', `ui-keypad--${variant}`, `ui-keypad--${kind}`)} style={{ '--kind-tone': KIND_TONE[kind] } as CSSProperties}>
+    <div
+      className={cx('ui-keypad', `ui-keypad--${variant}`, `ui-keypad--${kind}`)}
+      style={{ '--kind-tone': KIND_TONE[kind] } as CSSProperties}
+      data-kbd={byKeyboard || undefined}
+      onKeyDownCapture={() => setByKeyboard(true)}
+      onPointerDownCapture={() => setByKeyboard(false)}
+    >
       {showDisplay ? (
         <output className="ui-keypad__display" role="status" aria-live="polite" htmlFor={inputId}>
           <span className="ui-keypad__expr num" aria-hidden={!hasOps}>
@@ -200,8 +208,8 @@ export const AmountKeypad = forwardRef<AmountKeypadHandle, AmountKeypadProps>(fu
               <AmountText minor={minor} size="hero" highlight={minor > 0} currency={currency} locale={loc} neutral />
             </span>
           </span>
-          <span id={msgId} className="ui-keypad__msg" data-visible={zeroMsg || undefined}>
-            {zeroMsg ? t('ui.keypad.zero') : ''}
+          <span id={msgId} className="ui-keypad__msg" data-visible={msgText !== '' || undefined}>
+            {msgText}
           </span>
         </output>
       ) : null}
@@ -214,7 +222,7 @@ export const AmountKeypad = forwardRef<AmountKeypadHandle, AmountKeypadProps>(fu
         autoComplete="off"
         aria-label={label ?? t('ui.keypad.amount')}
         aria-describedby={`${hintId} ${msgId}`}
-        aria-invalid={zeroMsg || undefined}
+        aria-invalid={msgText !== '' || undefined}
         value={systemKeyboard ? formatExpression(expr, loc) : expr}
         onChange={(e) => {
           if (systemKeyboard) update(sanitizePastedAmount(e.currentTarget.value, loc, digits));
@@ -222,7 +230,7 @@ export const AmountKeypad = forwardRef<AmountKeypadHandle, AmountKeypadProps>(fu
         onKeyDown={onPhysicalKey}
         onPaste={(e) => {
           e.preventDefault();
-          update(sanitizePastedAmount(e.clipboardData.getData('text'), loc, digits));
+          update(pastedAmountExpr(e.clipboardData.getData('text'), loc, digits));
         }}
       />
       <span id={hintId} className="visually-hidden">

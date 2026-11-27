@@ -176,15 +176,19 @@
   display: grid;
   gap: var(--s-3);
 }
-.bk-pwgrid {
-  display: grid;
-  gap: var(--s-4);
-  grid-template-columns: minmax(0, 1fr);
+.bk-plainwarn {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: 0;
+  color: var(--warn-ink);
+  font-size: var(--t-small);
 }
-@container bk (width >= 40rem) {
-  .bk-pwgrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.bk-plainwarn svg {
+  flex-shrink: 0;
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin-block-start: 0.15em;
 }
 .bk-result {
   margin: 0;
@@ -360,16 +364,16 @@
   }
 }
 .bk-inline {
-  display: grid;
-  gap: var(--s-3);
-  align-items: start;
-  justify-items: start;
+  max-inline-size: 24rem;
 }
-@container bk (width >= 30rem) {
-  .bk-inline {
-    grid-template-columns: minmax(0, 14rem) auto;
-    align-items: end;
-  }
+.bk-inline__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.bk-inline__row > .ui-input {
+  flex: 1 1 8rem;
+  min-inline-size: 0;
 }
 
 /* ───────────── Plantillas ───────────── */

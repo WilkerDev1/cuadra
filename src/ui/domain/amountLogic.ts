@@ -153,7 +153,10 @@ export function formatExpression(expr: string, locale: string): string {
     .join('');
 }
 
-/** Texto pegado o tecleado → expresión canónica (`RD$ 1,250.50` → `1250.50`). */
+/**
+ * Texto tecleado con el teclado del sistema → expresión canónica (`1,250.50` → `1250.50`). Recorta decimales
+ * sobrantes porque llega carácter a carácter; lo PEGADO pasa por `pastedAmountExpr` (no recorta).
+ */
 export function sanitizePastedAmount(text: string, locale: string, minorDigits: number): string {
   const { decimal, group } = localeSeparators(locale);
   let s = text

@@ -6,7 +6,7 @@ import { useUiStore } from '../state/uiStore';
 
 /** El `<dialog>` modal de más arriba, o `null`. Fuera de él todo es inerte, así que los avisos deben vivir dentro. */
 function topModalDialog(): HTMLDialogElement | null {
-  const open = [...document.querySelectorAll('dialog[open]')].filter((d): d is HTMLDialogElement => d instanceof HTMLDialogElement && d.matches(':modal'));
+  const open = [...document.querySelectorAll('dialog[open]')].filter((d): d is HTMLDialogElement => d instanceof HTMLDialogElement && d.matches(':modal') && !d.classList.contains('lock-layer'));
   return open.at(-1) ?? null;
 }
 

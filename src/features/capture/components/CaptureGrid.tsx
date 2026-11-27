@@ -56,6 +56,24 @@ export function CaptureGrid({ caption, columns, rows, onRowsChange, results, ser
   const selection = useRef<{ key: string; from: number; to: number } | null>(null);
   const [visited, setVisited] = useState<ReadonlySet<string>>(new Set());
   const [announce, setAnnounce] = useState('');
+  // ¿Hay columnas pasando por debajo de Monto (fijo a la derecha)? Entonces su borde lleva sombra: la columna cortada
+  // («MÉTODO I…») se lee como «sigue debajo», no como una etiqueta rota.
+  const scroller = useRef<HTMLDivElement>(null);
+  const [under, setUnder] = useState(false);
+  useEffect(() => {
+    const el = scroller.current;
+    if (el === null) return;
+    const check = () => setUnder(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    if (el.firstElementChild !== null) ro.observe(el.firstElementChild);
+    return () => {
+      el.removeEventListener('scroll', check);
+      ro.disconnect();
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const sel = selection.current;
@@ -158,7 +176,7 @@ export function CaptureGrid({ caption, columns, rows, onRowsChange, results, ser
   const issueText = (issue: CellIssue) => t(`grid.issue.${issue}`);
 
   return (
-    <div className="cap-grid" role="region" aria-labelledby={captionId} tabIndex={0}>
+    <div ref={scroller} className="cap-grid" role="region" aria-labelledby={captionId} tabIndex={0} data-under={under || undefined}>
       <table className="cap-grid__table">
         <caption id={captionId} className="visually-hidden">
           {caption}
@@ -169,7 +187,7 @@ export function CaptureGrid({ caption, columns, rows, onRowsChange, results, ser
               <span className="visually-hidden">{t('grid.rowNumber')}</span>
             </th>
             {columns.map((c) => (
-              <th key={c.key} scope="col" className={cx(`cap-grid__h--${c.kind}`, c.field !== undefined && `cap-grid__h--${c.field.type}`)}>
+              <th key={c.key} scope="col" title={c.label} className={cx(`cap-grid__h--${c.kind}`, c.field !== undefined && `cap-grid__h--${c.field.type}`)}>
                 {c.label}
               </th>
             ))}

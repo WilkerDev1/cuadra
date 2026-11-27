@@ -2,7 +2,7 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useCallback, useState, type ReactNode } from 'react';
 import { useT } from '../../../i18n';
-import { IconButton } from '../../../ui';
+import { Button, IconButton } from '../../../ui';
 
 export function ReorderButtons({
   name,
@@ -38,4 +38,16 @@ export function useAnnouncer(): [node: ReactNode, announce: (text: string) => vo
     </p>
   );
   return [node, announce];
+}
+
+/** En pantallas estrechas ↑ ↓ se esconden y este botón los muestra: la fila conserva el ancho para el nombre. */
+export function OrderToggle({ ordering, onToggle }: { ordering: boolean; onToggle: () => void }) {
+  const t = useT('settings');
+  return (
+    <div className="set-ordertoggle">
+      <Button variant="secondary" aria-pressed={ordering} onClick={onToggle}>
+        {ordering ? t('orderDone') : t('order')}
+      </Button>
+    </div>
+  );
 }

@@ -2,7 +2,7 @@ import { ArrowLeft, KeyRound, Lock, LockOpen, ShieldCheck, ShieldOff } from 'luc
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useCuadra } from '../../../app/data/CuadraProvider';
-import { useAuth, usePushToast } from '../../../app/data/hooks';
+import { useAuth, usePushToast, useReturnToWorkspace } from '../../../app/data/hooks';
 import { errorMessage } from '../../../app/data/errorMessage';
 import { isCryptoAvailable, type AuthStatus } from '../../../core';
 import { useT } from '../../../i18n';
@@ -28,6 +28,7 @@ type Reveal = { recoveryKey: string; profileName: string | null; doneToast: stri
 export function Component() {
   const t = useT();
   const auth = useAuth();
+  const back = useReturnToWorkspace();
   const [loadError, setLoadError] = useState(false);
   const [reveal, setReveal] = useState<Reveal | null>(null);
   const pushToast = usePushToast();
@@ -88,9 +89,9 @@ export function Component() {
   return (
     <div className="auth-sec">
       <header className="auth-sec__head">
-        <Link to="/" className="auth-back">
+        <Link to={back.to} className="auth-back">
           <ArrowLeft aria-hidden="true" />
-          {t('auth.back')}
+          {back.name ?? t('auth.back')}
         </Link>
         <h1 className="auth-sec__title">{t('auth.settings.title')}</h1>
         {status === null ? null : <StatusLine status={status} />}

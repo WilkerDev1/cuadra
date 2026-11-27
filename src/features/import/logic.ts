@@ -1,12 +1,15 @@
 // Lógica pura del asistente de importación: asignación de columnas ↔ ColumnMapping, filtros y totales de la vista
 // previa y textos de celdas. Sin DOM ni React: se prueba en logic.test.ts.
 import type {
+  Account,
   Cell,
   ColumnMapping,
   DateFormat,
+  Field,
   ImportIssue,
   ImportPreviewRow,
   RawTable,
+  ResolvedDateFormat,
 } from '../../core';
 
 // ── Asignación de columnas ─────────────────────────────────────────────────────────────
@@ -240,7 +243,7 @@ export function visibleIssues(row: ImportPreviewRow): ImportIssue[] {
   return row.issues.filter((i) => !QUIET.has(i));
 }
 
-export type CellColumn = 'date' | 'description' | 'amount' | 'status';
+export type CellColumn = 'date' | 'description' | 'amount' | 'account' | 'status';
 
 /** En qué celda se marca un problema (fondo de aviso). */
 export function issueColumn(issue: ImportIssue): CellColumn {
@@ -251,6 +254,9 @@ export function issueColumn(issue: ImportIssue): CellColumn {
       return 'date';
     case 'description_required':
       return 'description';
+    case 'unknown_account':
+    case 'account_archived':
+      return 'account';
     case 'amount_empty':
     case 'both_amounts':
     case 'empty':
@@ -269,11 +275,118 @@ export function flaggedColumns(row: ImportPreviewRow): ReadonlySet<CellColumn> {
   return new Set(visibleIssues(row).map(issueColumn));
 }
 
-/** Fecha y descripción que se muestran de una fila: el borrador si se pudo leer, o el texto crudo del archivo. */
-export function rowDisplay(row: ImportPreviewRow, mapping: ColumnMapping): { date: string; description: string } {
-  if (row.draft !== null) return { date: row.draft.date, description: row.draft.description };
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/** `YYYY-MM-DD` si el día existe en el calendario (31/02 no). */
+function isoIfReal(y: number, m: number, d: number): string | null {
+  if (!Number.isInteger(y) || m < 1 || m > 12 || d < 1) return null;
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return d > last ? null : `${y}-${pad(m)}-${pad(d)}`;
+}
+
+/**
+ * Fecha del archivo para mostrarla en una fila que no se pudo leer entera (p. ej. por el monto): con el formato que
+ * resolvió el núcleo, solo los casos comunes. Si no se entiende o el día no existe, null (se muestra el texto crudo).
+ */
+export function displayDate(text: string, format: ResolvedDateFormat): string | null {
+  const s = text.trim().replace(/[ T]\d{1,2}:\d{2}(:\d{2})?.*$/, '');
+  const iso = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(s);
+  if (iso) return isoIfReal(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  if (format === 'excel_serial' && /^\d{5}$/.test(s)) {
+    const d = new Date(Date.UTC(1899, 11, 30) + Number(s) * 86_400_000);
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  }
+  const m = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})$/.exec(s);
+  if (!m) return null;
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  const yy = m[3] ?? '';
+  const y = yy.length === 2 ? 2000 + Number(yy) : Number(yy);
+  return format === 'MM/dd/yyyy' ? isoIfReal(y, a, b) : isoIfReal(y, b, a);
+}
+
+/** Fecha y concepto que se muestran de una fila: el borrador si se pudo leer, o lo que se entiende del archivo. */
+export function rowDisplay(
+  row: ImportPreviewRow,
+  mapping: ColumnMapping,
+  dateFormat?: ResolvedDateFormat,
+): { date: string; dateRaw: string; description: string } {
+  const dateRaw = row.raw[mapping.date.column] ?? '';
+  if (row.draft !== null) return { date: row.draft.date, dateRaw, description: row.draft.description };
   const description = 'column' in mapping.description ? (row.raw[mapping.description.column] ?? '') : mapping.description.fixed;
-  return { date: row.raw[mapping.date.column] ?? '', description };
+  const parsed = dateFormat === undefined ? null : displayDate(dateRaw, dateFormat);
+  return { date: parsed ?? dateRaw, dateRaw, description };
+}
+
+/** Monto tal como viene en el archivo, para las filas que no se pudieron leer: en qué columna (entra/sale) y texto. */
+export function rawAmount(row: ImportPreviewRow, mapping: ColumnMapping): { side: 'in' | 'out'; text: string } | null {
+  const cell = (i: number) => (row.raw[i] ?? '').trim();
+  const a = mapping.amount;
+  if (a.mode === 'split') {
+    const inText = cell(a.inColumn);
+    if (inText !== '') return { side: 'in', text: inText };
+    const outText = cell(a.outColumn);
+    return outText === '' ? null : { side: 'out', text: outText };
+  }
+  const text = cell(a.column);
+  if (text === '') return null;
+  if (a.mode === 'with_type') {
+    const norm = (v: string) => v.trim().toLocaleLowerCase('es');
+    const type = norm(cell(a.typeColumn));
+    return { side: a.inValues.some((v) => norm(v) === type) ? 'in' : 'out', text };
+  }
+  return { side: /^\s*(-|\(|−)/.test(text) ? 'out' : 'in', text };
+}
+
+/** Columnas asignadas además de las básicas (cuenta y campos del espacio), en el orden del archivo. */
+export type ExtraColumn = { key: string; column: number; kind: 'account' } | { key: string; column: number; kind: 'field'; field: Field };
+
+export function extraColumns(mapping: ColumnMapping, fields: readonly Field[]): ExtraColumn[] {
+  const out: ExtraColumn[] = [];
+  if (mapping.account !== undefined) out.push({ key: 'account', column: mapping.account.column, kind: 'account' });
+  for (const [fieldId, { column }] of Object.entries(mapping.fields)) {
+    const field = fields.find((f) => f.id === fieldId);
+    if (field !== undefined) out.push({ key: `field:${fieldId}`, column, kind: 'field', field });
+  }
+  return out.sort((a, b) => a.column - b.column);
+}
+
+export type ExtraCell =
+  | { kind: 'empty' }
+  | { kind: 'text'; text: string }
+  | { kind: 'date'; iso: string }
+  | { kind: 'bool'; value: boolean }
+  /** Opción de lista que se creará al importar. */
+  | { kind: 'new'; text: string }
+  /** Texto del archivo sin interpretar (fila con error). */
+  | { kind: 'raw'; text: string };
+
+/** Lo que va a quedar en la cuenta o el campo de una fila: el valor interpretado, la opción nueva o el texto crudo. */
+export function extraCell(row: ImportPreviewRow, col: ExtraColumn, accounts: readonly Account[]): ExtraCell {
+  const raw = (row.raw[col.column] ?? '').trim();
+  if (col.kind === 'account') {
+    if (row.draft === null) return raw === '' ? { kind: 'empty' } : { kind: 'raw', text: raw };
+    const id = row.draft.accountId;
+    const name = accounts.find((a) => a.id === id)?.name;
+    return name === undefined ? { kind: 'raw', text: raw } : { kind: 'text', text: name };
+  }
+  const fieldId = col.field.id;
+  const pending = row.pendingOptions.find((p) => p.fieldId === fieldId);
+  if (pending !== undefined) return { kind: 'new', text: pending.label };
+  const value = row.draft?.values?.[fieldId];
+  if (value === undefined) return raw === '' ? { kind: 'empty' } : { kind: 'raw', text: raw };
+  switch (value.type) {
+    case 'list':
+      return { kind: 'text', text: col.field.options.find((o) => o.id === value.optionId)?.label ?? raw };
+    case 'date':
+      return { kind: 'date', iso: value.value };
+    case 'bool':
+      return { kind: 'bool', value: value.value };
+    case 'number':
+      return { kind: 'text', text: raw === '' ? String(value.value) : raw };
+    default:
+      return value.value === '' ? { kind: 'empty' } : { kind: 'text', text: value.value };
+  }
 }
 
 /** Texto del archivo: nombre sin extensión para rotular el lote. */

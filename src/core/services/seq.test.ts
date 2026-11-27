@@ -112,6 +112,36 @@ describe('seq por cuenta', () => {
     expect((await t.cuadra.transactions.create(sale(cash, 99))).value.seq).toBe(51);
   });
 
+  it('createMany no hace un viaje por fila: lote y pares reserva+INSERT van juntos (runSeries), con seq correctos', async () => {
+    await t.cuadra.transactions.create(sale(bank, 0)); // Banco ya va por el 2
+    const calls: string[] = [];
+    const original = t.driver.transaction.bind(t.driver);
+    t.driver.transaction = ((fn: (tx: never) => Promise<unknown>) =>
+      original((tx) => {
+        const counted = Object.fromEntries(
+          (['all', 'get', 'run', 'runMany', 'runSeries'] as const)
+            .filter((op) => tx[op] !== undefined)
+            .map((op) => [op, (...a: unknown[]) => (calls.push(op), (tx[op] as (...x: unknown[]) => unknown)(...a))]),
+        );
+        return fn(counted as never);
+      })) as typeof t.driver.transaction;
+    const drafts = Array.from({ length: 300 }, (_, i) => sale(i % 3 === 0 ? bank : cash, i));
+    const ok = await t.cuadra.transactions.createMany({
+      workspaceId: ws,
+      batch: { source: 'import', accountId: null, label: 'Muchas' },
+      drafts,
+      audit: { action: 'import', message: 'audit.import' },
+    });
+    expect(ok.value.ids).toHaveLength(300);
+    expect(calls.filter((c) => c === 'runSeries')).toHaveLength(1);
+    expect(calls.length).toBeLessThan(12);
+    const seqs = async (a: Id) =>
+      (await t.driver.all<{ seq: number }>('SELECT seq FROM transactions WHERE account_id = ? ORDER BY seq', [a])).map((r) => Number(r.seq));
+    expect(await seqs(bank)).toEqual(Array.from({ length: 101 }, (_, i) => i + 1));
+    expect(await seqs(cash)).toEqual(Array.from({ length: 200 }, (_, i) => i + 1));
+    expect(await nextSeqOf(t.driver, bank)).toBe(102);
+  });
+
   it('cambiar la cuenta de un movimiento → account_change_forbidden', async () => {
     const { value } = await t.cuadra.transactions.create(sale(cash));
     const patch = { accountId: bank } as unknown as TxPatch;

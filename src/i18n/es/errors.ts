@@ -60,6 +60,10 @@ export default {
   'errors.password_too_long': 'La contraseña es demasiado larga.',
   'errors.profile_name_required': 'Escribe un nombre de hasta 60 caracteres.',
   'errors.invalid_auto_lock': 'Elige un tiempo de bloqueo válido.',
+  'errors.text_too_long': 'El texto es demasiado largo.',
+  'errors.text_too_long.description': 'La descripción admite hasta 200 caracteres.',
+  'errors.text_too_long.notes': 'Las notas admiten hasta 2 000 caracteres.',
+  'errors.text_too_long.label': 'La etiqueta admite hasta 80 caracteres.',
   'errors.crypto_unavailable': 'Este navegador no permite cifrar en esta dirección. Usa https o la aplicación de escritorio.',
   'errors.unknown': 'Algo salió mal. Inténtalo de nuevo.',
 
@@ -77,4 +81,5 @@ export default {
   'errors.warning.field_inactive': 'Usa un campo desactivado.',
   'errors.warning.field_missing': 'Usa un campo que ya no existe.',
   'errors.warning.option_inactive': 'Usa una opción desactivada.',
+  'errors.warning.option_missing': 'Usa una opción que ya no existe.',
 } as const;

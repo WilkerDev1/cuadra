@@ -1,9 +1,9 @@
 // Ayudas comunes a los perfiles de datos de ejemplo: acumulan elementos, siguen el saldo de cada cuenta
 // (para no dejar en negativo lo que no debe) y eligen movimientos para la "historia" (ediciones, anulados).
-import { addDays, compareIsoDate } from '../dates';
+import { addDays, compareIsoDate, diffDays } from '../dates';
 import { Money } from '../money';
 import type { IsoDate, Minor } from '../types';
-import type { DemoItem, DemoOpening, DemoRow, DemoStep, DemoValues } from './plan';
+import { recordedOn, type DemoItem, type DemoOpening, type DemoRow, type DemoStep, type DemoValues } from './plan';
 import type { Rng } from './prng';
 
 type TxItem = Extract<DemoItem, { t: 'tx' }>;
@@ -25,6 +25,34 @@ export class PlanBuilder {
 
   balanceOf(account: string): Minor {
     return this.balance.get(account) ?? 0;
+  }
+
+  /**
+   * Saldo más bajo que tendrá la cuenta desde `date` (incluido) hasta el final, con lo anotado hasta ahora,
+   * ordenado por fecha. Sirve para sacar dinero sin dejar la cuenta en negativo más adelante.
+   */
+  lowestBalanceFrom(account: string, date: IsoDate, opening: Minor): Minor {
+    const deltas = new Map<IsoDate, Minor>();
+    const add = (d: IsoDate, v: Minor) => deltas.set(d, Money.add(deltas.get(d) ?? 0, v));
+    for (const it of this.items) {
+      if (it.t === 'tx' && it.account === account) add(it.date, it.kind === 'income' ? it.amountMinor : -it.amountMinor);
+      else if (it.t === 'transfer') {
+        if (it.from === account) add(it.date, -it.amountMinor);
+        if (it.to === account) add(it.date, it.amountMinor);
+      } else if (it.t === 'capture' && it.account === account) {
+        const sum = Money.sum(it.rows.map((r) => r.amountMinor));
+        add(it.date, it.kind === 'income' ? sum : -sum);
+      } else if (it.t === 'import' && it.account === account) {
+        for (const r of it.rows) add(r.date, r.kind === 'income' ? r.amountMinor : -r.amountMinor);
+      }
+    }
+    let run = opening;
+    let low: Minor | null = null;
+    for (const d of [...deltas.keys()].sort()) {
+      run = Money.add(run, deltas.get(d) ?? 0);
+      if (compareIsoDate(d, date) >= 0) low = low === null ? run : Math.min(low, run);
+    }
+    return low ?? run;
   }
 
   private move(account: string, delta: Minor): void {
@@ -141,15 +169,31 @@ export class PlanBuilder {
     });
   }
 
+  /**
+   * Añade un paso de historia. Los que tocan un movimiento o lote (`ref`) se escriben relativos a su FECHA
+   * ("se anuló 3 días después"), pero el movimiento suelto no queda anotado hasta el domingo de su semana
+   * (recordedOn): el paso se corre lo que va de la fecha a la anotación, así la historia empieza siempre
+   * después de anotar y los pasos de un mismo movimiento conservan su orden y separación.
+   */
   step(s: DemoStep): void {
-    if (compareIsoDate(s.at, this.anchor) > 0) return;
-    this.steps.push(s);
+    let at = s.at;
+    if ('ref' in s) {
+      const it = this.items.find((x) => x.ref === s.ref);
+      if (it !== undefined) {
+        const recorded = recordedOn(it, this.anchor);
+        at = addDays(at, Math.max(0, diffDays(it.date, recorded)));
+        if (compareIsoDate(at, recorded) <= 0) at = addDays(recorded, 1);
+      }
+    }
+    if (compareIsoDate(at, this.anchor) > 0) return;
+    this.steps.push(at === s.at ? s : { ...s, at });
   }
 
   /** Elige `count` movimientos simples distintos que cumplan `filter`, entre `from` y `to`, sin repetir `taken`. */
   pickTx(rng: Rng, count: number, filter: (it: TxItem) => boolean, taken: Set<string>, window?: { from?: IsoDate; to?: IsoDate }): TxItem[] {
     const from = window?.from ?? addDays(this.start, 10);
-    const to = window?.to ?? addDays(this.anchor, -7);
+    // Tres semanas de margen: la historia se corre hasta el domingo de anotación y no debe caer en el futuro.
+    const to = window?.to ?? addDays(this.anchor, -21);
     const pool = this.items.filter(
       (it): it is TxItem =>
         it.t === 'tx' &&

@@ -64,7 +64,7 @@ export function useFetchAll() {
 
 export function useBatches() {
   const ws = useWorkspaceId();
-  return useCuadraQuery<Batch[]>({ key: ['ledger.batches', ws], tables: ['batches', 'transactions'], fn: (c) => c.batches.list(ws, { limit: 200 }) });
+  return useCuadraQuery<Batch[]>({ key: ['ledger.batches', ws], tables: ['batches', 'transactions'], fn: (c) => c.batches.list(ws, { limit: 1000 }) });
 }
 
 export function useBatch(id: Id | undefined) {

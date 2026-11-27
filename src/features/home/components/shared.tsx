@@ -31,7 +31,8 @@ export function useCompare(): (cur: Minor, prev: Minor, prevLabel: string) => st
   const t = useT();
   const fmt = useMoneyFormat();
   return (cur, prev, prevLabel) => {
-    if (cur !== 0 && prev !== 0 && cur < 0 !== prev < 0) return t('home.compare.flip', { period: prevLabel, amount: fmt(prev, { sign: 'always' }) });
+    // Signo distinto, o los dos negativos («662 % menos» con una caída seis veces mayor se lee al revés): el monto.
+    if (cur !== 0 && prev !== 0 && (cur < 0 !== prev < 0 || cur < 0)) return t('home.compare.flip', { period: prevLabel, amount: fmt(prev, { sign: 'always' }).replace('-', '\u2212') });
     const r = changeRatio(cur, prev);
     if (r === null) return cur === 0 ? t('home.compare.same', { period: prevLabel }) : t('home.compare.none', { period: prevLabel });
     if (Math.abs(r) < 0.005) return t('home.compare.same', { period: prevLabel });

@@ -137,21 +137,60 @@ export function buildTxDraft(state: EntryState, minor: Minor | null, fields: rea
   };
 }
 
-/** Parche mínimo para `transactions.update`: solo lo que cambió (valores vaciados → `null`). */
-export function buildPatch(original: Transaction, state: EntryState, minor: Minor, fields: readonly Field[]): TxPatch {
+/**
+ * Valores que dejan de aplicar al cambiar de tipo al editar (`fromFields`: formulario del tipo original;
+ * `toFields`: del tipo nuevo): un campo que solo existe para el tipo original, o una opción de lista que solo aplica
+ * a él (Categoría «Ventas» en una salida). El formulario nuevo no los muestra, así que no deben quedarse ocultos.
+ * Solo cuenta lo que el formulario original sí mostraba: opciones o campos ya desactivados siguen intactos.
+ */
+export function staleValues(
+  values: FieldValues,
+  fromFields: readonly Field[],
+  toFields: readonly Field[],
+): Array<{ field: Field; label: string }> {
+  const out: Array<{ field: Field; label: string }> = [];
+  for (const from of fromFields) {
+    const v = values[from.id];
+    if (v === undefined) continue;
+    const to = toFields.find((f) => f.id === from.id);
+    if (v.type === 'list') {
+      const option = from.options.find((o) => o.id === v.optionId);
+      if (option === undefined) continue; // opción inactiva o fusionada: no es de este cambio
+      if (to === undefined || !to.options.some((o) => o.id === v.optionId)) out.push({ field: from, label: option.label });
+    } else if (to === undefined) {
+      out.push({ field: from, label: v.type === 'bool' ? '' : String(v.value) });
+    }
+  }
+  return out;
+}
+
+/**
+ * Parche mínimo para `transactions.update`: solo lo que cambió (valores vaciados → `null`). Si el tipo cambia y se
+ * da el formulario del tipo original, los valores que ya no aplican se vacían (ver `staleValues`).
+ */
+export function buildPatch(
+  original: Transaction,
+  state: EntryState,
+  minor: Minor,
+  fields: readonly Field[],
+  fromFields?: readonly Field[],
+): TxPatch {
   const patch: TxPatch = {};
   if ((original.kind === 'income' || original.kind === 'expense') && state.kind !== original.kind) patch.kind = state.kind;
+  const stale = patch.kind !== undefined && fromFields !== undefined ? staleValues(state.values, fromFields, fields) : [];
+  const current: FieldValues = { ...state.values };
+  for (const s of stale) delete current[s.field.id];
   if (minor !== original.amountMinor) patch.amountMinor = minor;
   if (state.date !== original.date) patch.date = state.date;
-  const description = resolveDescription(state.description, state.values, fields);
+  const description = resolveDescription(state.description, current, fields);
   if (description !== original.description) patch.description = description;
   if (state.notes.trim() !== original.notes) patch.notes = state.notes.trim();
-  const shown = new Set(fields.map((f) => f.id));
+  const shown = new Set([...fields.map((f) => f.id), ...stale.map((s) => s.field.id)]);
   const values: Record<Id, FieldValue | null> = {};
   for (const id of new Set([...Object.keys(original.values), ...Object.keys(state.values)])) {
     if (!shown.has(id)) continue; // campos que el formulario no muestra (inactivos, de otro tipo): intactos
     const before = original.values[id];
-    const after = state.values[id];
+    const after = current[id];
     if (fieldValueEquals(before, after)) continue;
     values[id] = after ?? null;
   }

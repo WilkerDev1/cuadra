@@ -14,6 +14,7 @@ import { accountName } from '../components/rowParts';
 import { localDay } from '../components/format';
 import { useBatch, useCurrency, useLookups } from '../data';
 import { batchBalance } from '../logic/batch';
+import { belongsTo } from '../logic/workspace';
 import '../ledger.css';
 
 export function Component() {
@@ -22,12 +23,14 @@ export function Component() {
   const { batchId } = useParams();
   const batch = useBatch(batchId);
   if (batch.isPending) return <Skeleton rows={6} />;
-  if (batch.isError)
+  // Un lote de otro espacio se trata como no encontrado: sus totales se calcularían con el espacio de la ruta y
+  // «Anular lote» tocaría el otro espacio.
+  if (batch.isError || !belongsTo(batch.data, ws))
     return (
       <div className="lg">
         <h1>{t('ledger.batch.missing')}</h1>
         <Banner tone="warn" action={<Link to={`/e/${ws}/lotes`}>{t('ledger.batches.back')}</Link>}>
-          {errorMessage(batch.error, t)}
+          {batch.isError ? errorMessage(batch.error, t) : t('ledger.otherWorkspace')}
         </Banner>
       </div>
     );
@@ -125,7 +128,7 @@ function BatchView({ batch }: { batch: Batch }) {
             ) : null}
             {balance.canRestore ? (
               <Button icon={RotateCcw} onClick={() => setDialog('restore')}>
-                {t('ledger.batch.restore')}
+                {balance.canVoid ? t('ledger.batch.restoreCount', { n: balance.restorableCount }) : t('ledger.batch.restore')}
               </Button>
             ) : null}
           </div>
@@ -153,7 +156,7 @@ function BatchView({ batch }: { batch: Batch }) {
       <Dialog
         open={dialog === 'restore'}
         onClose={() => setDialog(null)}
-        title={t('ledger.batch.restoreTitle')}
+        title={t('ledger.batch.restoreTitle', { n: batch.restorableCount })}
         description={t('ledger.batch.restoreText')}
         confirmLabel={t('ledger.batch.restore')}
         confirmLoading={restore.isPending}

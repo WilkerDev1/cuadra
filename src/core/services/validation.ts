@@ -12,6 +12,7 @@ import { MAX_MINOR, Money } from '../money';
 import type { SqlExecutor } from '../ports';
 import {
   groupFieldValues,
+  jsonObjectSql,
   selectColumns,
   type AccountRecord,
   type FieldValueRecord,
@@ -48,23 +49,26 @@ export interface WorkspaceContext {
   foreignAccounts: Set<Id>;
 }
 
-/** Tres consultas, sea cual sea el tamaño del lote. `not_found` si el espacio no existe. */
+/**
+ * UNA consulta (una ida al worker), sea cual sea el tamaño del lote: espacio, cuentas, campos y opciones como
+ * JSON. Toda escritura empieza por aquí, así que leerlas por separado eran cuatro viajes por guardado.
+ * `not_found` si el espacio no existe. Las columnas son TEXT/INTEGER (sin BLOB ni REAL): JSON las conserva.
+ */
 export async function loadWorkspaceContext(tx: SqlExecutor, workspaceId: Id): Promise<WorkspaceContext> {
-  const workspace = await tx.get<WorkspaceRecord>(`SELECT ${selectColumns('workspaces')} FROM workspaces WHERE id = ?`, [
-    workspaceId,
-  ]);
-  if (!workspace) throw new DomainError('not_found', { entity: 'workspace', id: workspaceId });
-  const accounts = await tx.all<AccountRecord>(`SELECT ${selectColumns('accounts')} FROM accounts WHERE workspace_id = ?`, [
-    workspaceId,
-  ]);
-  const fields = await tx.all<FieldRecord>(`SELECT ${selectColumns('fields')} FROM fields WHERE workspace_id = ?`, [
-    workspaceId,
-  ]);
-  const options = await tx.all<FieldOptionRecord>(
-    `SELECT ${selectColumns('field_options', 'o')} FROM field_options o JOIN fields f ON f.id = o.field_id
-     WHERE f.workspace_id = ?`,
-    [workspaceId],
+  const row = await tx.get<{ workspace: string | null; accounts: string; fields: string; options: string }>(
+    `SELECT
+       (SELECT ${jsonObjectSql('workspaces', 'w')} FROM workspaces w WHERE w.id = :ws) AS workspace,
+       (SELECT json_group_array(${jsonObjectSql('accounts', 'a')}) FROM accounts a WHERE a.workspace_id = :ws) AS accounts,
+       (SELECT json_group_array(${jsonObjectSql('fields', 'f')}) FROM fields f WHERE f.workspace_id = :ws) AS fields,
+       (SELECT json_group_array(${jsonObjectSql('field_options', 'o')})
+          FROM field_options o JOIN fields f ON f.id = o.field_id WHERE f.workspace_id = :ws) AS options`,
+    { ws: workspaceId },
   );
+  if (!row || row.workspace === null) throw new DomainError('not_found', { entity: 'workspace', id: workspaceId });
+  const workspace = JSON.parse(row.workspace) as WorkspaceRecord;
+  const accounts = JSON.parse(row.accounts) as AccountRecord[];
+  const fields = JSON.parse(row.fields) as FieldRecord[];
+  const options = JSON.parse(row.options) as FieldOptionRecord[];
   return {
     workspace,
     accounts: new Map(accounts.map((a) => [a.id, a])),
@@ -153,6 +157,23 @@ export function assertAmount(amount: unknown, details?: Record<string, unknown>)
 
 export function assertDate(date: unknown, details?: Record<string, unknown>): asserts date is IsoDate {
   if (!isStorableDate(date)) throw new DomainError('invalid_date', { ...details, date });
+}
+
+/** Máximos de texto (en caracteres, tras recortar espacios). La UI los usa como maxLength. */
+export const MAX_DESCRIPTION_LENGTH = 200;
+export const MAX_NOTES_LENGTH = 2_000;
+export const MAX_LABEL_LENGTH = 80;
+
+/** Longitud en caracteres (puntos de código), no en unidades UTF-16: un emoji cuenta uno. */
+export const charLength = (s: string): number => {
+  let n = 0;
+  for (const _ of s) n += 1;
+  return n;
+};
+
+/** text_too_long si `text` pasa de `max` caracteres; `reason` dice cuál ('description' | 'notes' | 'label'). */
+export function assertMaxLength(text: string, max: number, reason: 'description' | 'notes' | 'label'): void {
+  if (text.length > max && charLength(text) > max) throw new DomainError('text_too_long', { reason, max });
 }
 
 export function assertDescription(description: unknown, details?: Record<string, unknown>): void {
@@ -255,6 +276,8 @@ export function assertLeg(
   assertAmount(leg.amountMinor);
   assertDate(leg.date);
   assertDescription(leg.description);
+  assertMaxLength(leg.description, MAX_DESCRIPTION_LENGTH, 'description');
+  assertMaxLength(leg.notes, MAX_NOTES_LENGTH, 'notes');
   if (leg.kind === 'income' && leg.direction !== 'in') throw new DomainError('kind_change_forbidden', { kind: leg.kind });
   if (leg.kind === 'expense' && leg.direction !== 'out') throw new DomainError('kind_change_forbidden', { kind: leg.kind });
   assertValues(ctx, opts.rawValues ?? leg.values, opts.previousValues);

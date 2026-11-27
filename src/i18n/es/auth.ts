@@ -8,7 +8,7 @@ export default {
   'auth.notice.oldBackups':
     'Si cambias la contraseña, los respaldos anteriores se siguen abriendo con la contraseña con la que se hicieron.',
   'auth.notice.noRecovery':
-    'Si olvidas la contraseña y pierdes la clave de recuperación, no hay forma de entrar ni de abrir tus respaldos cifrados.',
+    'Si olvidas la contraseña y pierdes la clave de recuperación, no hay forma de entrar. La clave de recuperación te deja poner una contraseña nueva, pero los respaldos cifrados solo se abren con la contraseña con la que se hicieron.',
   'auth.notice.cryptoUnavailable':
     'Este navegador no permite cifrar aquí. Abre Cuadra desde una dirección segura (https) o la aplicación de escritorio.',
   'auth.notice.optional': 'La contraseña es opcional. Sin ella, cualquiera que abra este dispositivo verá tus libros.',
@@ -95,7 +95,7 @@ export default {
 
   // ── Interfaz de la feature auth (Ola 3) ──
   'auth.nav': 'Contraseña y bloqueo',
-  'auth.back': 'Volver al libro',
+  'auth.back': 'Espacios',
   'auth.lock.locked': 'Bloqueada',
   'auth.lock.waitShort': 'Espera {time}',
   'auth.lock.waitReason': 'Demasiados intentos seguidos.',

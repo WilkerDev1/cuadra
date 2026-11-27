@@ -1,5 +1,6 @@
 // Guardar y leer archivos en el navegador: `showSaveFilePicker` si existe (Chromium) y, si no, un enlace de
 // descarga. Todo con detección de capacidades; nada de esto toca el núcleo.
+import { saveFile } from '../../app/data/download';
 
 export type SaveResult = 'saved' | 'cancelled';
 
@@ -17,17 +18,9 @@ export function hasSavePicker(): boolean {
   return savePicker() !== undefined;
 }
 
-/** Descarga con un enlace temporal; el navegador decide la carpeta. */
+/** Descarga con un enlace temporal (el navegador decide la carpeta) o, en Tauri, con «Guardar como». */
 export function downloadBlob(blob: Blob, name: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.rel = 'noopener';
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  void saveFile(blob, name);
 }
 
 export interface SaveOptions {
@@ -58,8 +51,8 @@ export async function saveTextFile({ name, text, description, mime = 'applicatio
       // Cualquier otro fallo del selector: se intenta la descarga normal.
     }
   }
-  downloadBlob(blob, name);
-  return 'saved';
+  // Descarga normal; en Tauri, «Guardar como» nativo, que sí sabe si se canceló.
+  return saveFile(blob, name);
 }
 
 /** Lee un archivo de texto elegido por la persona. */

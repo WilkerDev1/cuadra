@@ -14,6 +14,7 @@ import {
   span,
   sumGroups,
   tableRows,
+  tableWindow,
 } from './series';
 import { normalizeFilter, readLedgerSearch } from '../../../app/data/txFilterUrl';
 import { csvFileName, sheetToCsv, summarySheet } from './csv';
@@ -152,5 +153,39 @@ describe('CSV', () => {
   it('nombre de archivo', () => {
     expect(csvFileName('Gastos por categoría', '2026-11-27')).toBe('resumen-gastos-por-categoria-2026-11-27.csv');
     expect(csvFileName('Resumen', '2026-11-27')).toBe('resumen-2026-11-27.csv');
+  });
+});
+
+describe('ventana de la tabla (grupos enteros, sin pintar miles de filas)', () => {
+  const sub = (k: string) => g(k, k, 1, 0, 1);
+  const pts = buildPoints(
+    [g('d1', 'd1', 1, 0, 1, [sub('x'), sub('y')]), g('d2', 'd2', 1, 0, 1, [sub('x')]), g('d3', 'd3', 1, 0, 1, [sub('x'), sub('y')]), g('d4', 'd4', 1, 0, 1)],
+    'in',
+    null,
+    true,
+  );
+  const rows = tableRows(pts);
+  const ids = (w: { rows: readonly { id: string }[] }) => w.rows.map((r) => r.id);
+
+  it('sin pasar el tope, todo', () => {
+    const w = tableWindow(rows, 100, true);
+    expect(w.rows).toHaveLength(rows.length);
+    expect(w.hiddenGroups).toBe(0);
+    expect(w.totalGroups).toBe(4);
+  });
+  it('en el tiempo se ven los grupos más recientes, en orden y con sus subgrupos completos', () => {
+    const w = tableWindow(rows, 4, true);
+    expect(ids(w)).toEqual(['d3', 'd3/x', 'd3/y', 'd4']);
+    expect(w.hiddenGroups).toBe(2);
+  });
+  it('en dimensiones se ven los primeros', () => {
+    const w = tableWindow(rows, 5, false);
+    expect(ids(w)).toEqual(['d1', 'd1/x', 'd1/y', 'd2', 'd2/x']);
+    expect(w.hiddenGroups).toBe(2);
+  });
+  it('un grupo más largo que el tope se muestra entero (nunca una tabla vacía ni un grupo partido)', () => {
+    const w = tableWindow(rows, 1, false);
+    expect(ids(w)).toEqual(['d1', 'd1/x', 'd1/y']);
+    expect(w.hiddenGroups).toBe(3);
   });
 });

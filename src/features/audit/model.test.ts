@@ -7,6 +7,8 @@ import { historyCsv, historySheet, exportTranslate } from './exportAudit';
 import {
   ACTION_GROUPS,
   NO_FILTERS,
+  actionLabelKey,
+  dayHeading,
   changeLines,
   describeChange,
   entryAmount,
@@ -88,7 +90,9 @@ describe('agrupar por día', () => {
 describe('texto de cada entrada', () => {
   it('monto: el del movimiento o la suma del lote; nada si no hay', () => {
     expect(entryAmount(entry({}))).toEqual({ minor: 185000, kind: 'expense' });
-    expect(entryAmount(entry({ params: { sumMinor: 5000, count: 3 } }))).toEqual({ minor: 5000, kind: undefined });
+    expect(entryAmount(entry({ params: { sumMinor: 5000, count: 3, kind: 'income' } }))).toEqual({ minor: 5000, kind: 'income' });
+    // Un lote mixto (datos de ejemplo) suma entradas con salidas: no se enseña.
+    expect(entryAmount(entry({ params: { sumMinor: 5000, count: 3 } }))).toBeNull();
     expect(entryAmount(entry({ params: { name: 'Caja' } }))).toBeNull();
     expect(entryAmount(entry({ params: null }))).toBeNull();
   });
@@ -176,5 +180,20 @@ describe('de punta a punta contra el núcleo', () => {
     const edit = page.items.find((e) => e.action === 'edit')!;
     const lines = changeLines(edit, { ...ctx, fields: [] });
     expect(lines[0]).toMatchObject({ label: 'Monto', old: 'RD$1,234.56', new: 'RD$2,000.00' });
+  });
+});
+
+describe('rótulos del historial', () => {
+  it('«Anotado» solo para movimientos; otras creaciones son «Creación»', () => {
+    expect(actionLabelKey({ action: 'create', entityType: 'transaction' })).toBe('action.create');
+    expect(actionLabelKey({ action: 'create', entityType: 'view' })).toBe('action.created');
+    expect(actionLabelKey({ action: 'create', entityType: 'account' })).toBe('action.created');
+    expect(actionLabelKey({ action: 'edit', entityType: 'view' })).toBe('action.edit');
+  });
+
+  it('cabecera de día: Hoy, Ayer o el día de la semana sin repetir el número', () => {
+    expect(dayHeading('2026-11-27', '2026-11-27')).toBe('Hoy');
+    expect(dayHeading('2026-11-26', '2026-11-27')).toBe('Ayer');
+    expect(dayHeading('2026-11-25', '2026-11-27')).toBe('miércoles');
   });
 });

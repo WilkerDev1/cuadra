@@ -13,15 +13,20 @@ import { accountName, VoidDialog } from '../components/rowParts';
 import { dateTime, localDay, longDate } from '../components/format';
 import { useCurrency, useLookups } from '../data';
 import { padSeq } from '../logic/days';
+import { belongsTo } from '../logic/workspace';
 import { actionKey, changeLines, formatFieldValue } from '../logic/history';
 import '../ledger.css';
 
 export function Component() {
   const t = useT();
+  const ws = useWorkspaceId();
   const { txId } = useParams();
   const tx = useTransaction(txId);
   if (tx.isPending) return <Skeleton rows={6} />;
   if (tx.isError) return <Banner tone="warn" title={t('ledger.detail.missing')}>{errorMessage(tx.error, t)}</Banner>;
+  // Un enlace de otro espacio no se abre aquí: cuenta, campos y totales serían los de este espacio, y editar o
+  // anular tocaría el otro sin que se note (mismo criterio que AccountLedger).
+  if (!belongsTo(tx.data, ws)) return <Banner tone="warn" title={t('ledger.detail.missing')}>{t('ledger.otherWorkspace')}</Banner>;
   return <Detail tx={tx.data} />;
 }
 

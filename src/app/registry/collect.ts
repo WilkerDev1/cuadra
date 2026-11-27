@@ -1,8 +1,13 @@
 import type { FeatureModule } from './types';
 import { findRegistryProblems } from './select';
 
-// `features/*` son las áreas reales; las de id `_…` (galería) solo existen en desarrollo.
-const mods = import.meta.glob<{ feature: FeatureModule }>('../../features/*/index.ts', { eager: true });
+// `features/*` son las áreas reales; las carpetas `_…` (galería) solo existen en desarrollo. Van en otro glob para que
+// la compilación de producción ni las importe: si no, su código (y sus rutas perezosas) acababa en el precache del SW.
+const real = import.meta.glob<{ feature: FeatureModule }>(['../../features/*/index.ts', '!../../features/_*/index.ts'], { eager: true });
+const devOnly: Record<string, { feature: FeatureModule }> = import.meta.env.DEV
+  ? import.meta.glob<{ feature: FeatureModule }>('../../features/_*/index.ts', { eager: true })
+  : {};
+const mods = { ...real, ...devOnly };
 
 /** Las features con id que empieza por `_` (galería, pruebas) solo existen en desarrollo. */
 export function selectFeatures(modules: Record<string, { feature: FeatureModule }>, dev: boolean): FeatureModule[] {

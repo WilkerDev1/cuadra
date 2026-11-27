@@ -129,7 +129,7 @@ describe('views: vistas guardadas', () => {
     expect(isDomainError(await failure(() => views.save({ workspaceId: archived, name: 'X', recipe: FILTER })), 'workspace_archived')).toBe(true);
   });
 
-  it('una receta con un campo que ya no existe se limpia y avisa field_missing; una corrupta no tumba la lista', async () => {
+  it('una receta con un campo que ya no existe avisa field_missing sin ensanchar el filtro; una corrupta no tumba la lista', async () => {
     const { views, ws, cat, h: th } = await seed();
     const ghost = '01900000-0000-7000-8000-0000000000ff';
     const saved = await views.save({
@@ -150,7 +150,10 @@ describe('views: vistas guardadas', () => {
     expect(saved.warnings).toEqual([{ code: 'field_missing', fieldKeyOrId: ghost }]);
     const view = await views.get(saved.value.id);
     if (view.recipe.kind !== 'report') throw new Error('kind');
-    expect(view.recipe.filter.fields).toEqual([{ fieldId: cat.id, op: 'any_of', optionIds: [cat.opt['Ventas']] }]);
+    expect(view.recipe.filter.fields).toEqual([
+      { fieldId: ghost, op: 'empty' },
+      { fieldId: cat.id, op: 'any_of', optionIds: [cat.opt['Ventas']] },
+    ]);
     expect(view.recipe.groupByFieldIds).toEqual([cat.id]);
     expect(view.recipe.columns).toEqual(['date']);
     // La receta guardada no se reescribe: si el campo vuelve (respaldo), la vista vuelve entera.
@@ -160,5 +163,27 @@ describe('views: vistas guardadas', () => {
     await th.driver.run("UPDATE saved_views SET recipe = '{\"v\":9}' WHERE id = ?", [saved.value.id]);
     expect(await views.list(ws, 'report')).toEqual([]);
     expect(isDomainError(await failure(() => views.get(saved.value.id)), 'invalid_recipe')).toBe(true);
+  });
+
+  it('borrar la única opción de un filtro guardado no hace que la vista muestre todo el espacio', async () => {
+    const { views, ws, cat, fx, h: th } = await seed();
+    const acc = await fx.account(ws, 'Caja');
+    await fx.income(acc, 1000, '2026-01-10', 'Venta', { values: { [cat.id]: { option: cat.opt['Ventas']! } } });
+    await fx.income(acc, 2000, '2026-01-11', 'Otra');
+    const extra = await th.cuadra.fields.addOption(cat.id, { label: 'Temporal' });
+    const extraId = extra.value.id;
+    const saved = await views.save({
+      workspaceId: ws,
+      name: 'Solo temporal',
+      recipe: { v: 1, kind: 'filter', filter: { fields: [{ fieldId: cat.id, op: 'any_of', optionIds: [extraId] }] } },
+    });
+    const before = await th.cuadra.queries.totals(ws, saved.value.recipe.filter);
+    expect(before.count).toBe(0);
+
+    await th.cuadra.fields.deleteOption(extraId);
+    const view = await views.get(saved.value.id);
+    expect(view.warnings).toEqual([{ code: 'option_missing', fieldId: cat.id, optionId: extraId }]);
+    const after = await th.cuadra.queries.totals(ws, view.recipe.filter);
+    expect(after.count).toBe(0);
   });
 });

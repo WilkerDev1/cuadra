@@ -8,9 +8,10 @@ import { useBreakpoint } from '../../../app/state/breakpoint';
 import type { CaptureInput, Id, IsoDate } from '../../../core';
 import { hasKey, t as tGlobal, useT } from '../../../i18n';
 import { getLocale } from '../../../i18n/format';
-import { Button, DateField, Dialog, Field, Input, Segmented, Select, formatExpression } from '../../../ui';
+import { Button, Dialog, Field, Input, Segmented, Select, formatExpression } from '../../../ui';
 import { BurstCapture } from '../components/BurstCapture';
 import { CaptureGrid } from '../components/CaptureGrid';
+import { DateGroup } from '../components/DateGroup';
 import { RecentBatches } from '../components/RecentBatches';
 import { LoadError, Loading, NoAccounts } from '../components/States';
 import { Tape } from '../components/Tape';
@@ -18,6 +19,7 @@ import { defaultBatchLabel, isNotSaved, useSaveBatch } from '../components/useSa
 import { useCurrency, useDebounced, useSignedAmount, useToday } from '../hooks';
 import { parseAmountText } from '../logic/amount';
 import { isoToDmy } from '../logic/dates';
+import { controlGate } from '../logic/burst';
 import { parseEntryParams, pickAccount, type EntryKind } from '../logic/entry';
 import { buildColumns, emptyRow, evaluateGrid, keepUnsaved, type GridRow } from '../logic/grid';
 import '../capture.css';
@@ -115,7 +117,12 @@ function GridCapture({ initialAccountId, initialKind }: { initialAccountId: Id; 
     .filter((r) => r.capture !== null && r.minor !== null)
     .map((r) => ({ id: rows[r.index]!.id, minor: r.minor!, kind, description: r.capture!.description }));
 
+  // Un guardado a la vez: Ctrl+Enter dos veces seguidas (o Enter en el diálogo) no debe escribir el lote dos veces.
+  // `save.isPending` llega tarde (tras el render); el ref se marca en el mismo evento.
+  const saving = useRef(false);
+  const controlRef = useRef<HTMLInputElement>(null);
   const attempt = () => {
+    if (saving.current) return;
     setShowAll(true);
     setSaveError(null);
     if (summary.validCount === 0) {
@@ -123,13 +130,21 @@ function GridCapture({ initialAccountId, initialKind }: { initialAccountId: Id; 
       setFocusError((n) => n + 1);
       return;
     }
-    if (errorRows > 0 || (diff !== null && diff !== 0)) {
+    const gate = controlGate(control, diff, errorRows);
+    if (gate === 'block') {
+      setSaveError(t('batch.controlInvalid'));
+      controlRef.current?.focus();
+      return;
+    }
+    if (gate === 'confirm') {
       setConfirm('save');
       return;
     }
     void doSave();
   };
   const doSave = async () => {
+    if (saving.current) return;
+    saving.current = true;
     setConfirm(null);
     try {
       const r = await save.mutateAsync({ ...input, acceptControlMismatch: true });
@@ -140,6 +155,8 @@ function GridCapture({ initialAccountId, initialKind }: { initialAccountId: Id; 
     } catch (e) {
       if (isNotSaved(e)) setSaveError(t('grid.nothing'));
       else setSaveError(tGlobal('common.error.unknown'));
+    } finally {
+      saving.current = false;
     }
   };
 
@@ -176,18 +193,19 @@ function GridCapture({ initialAccountId, initialKind }: { initialAccountId: Id; 
             ]}
           />
         </div>
-        <div className="cap-group">
-          <span className="cap-label">{t('batch.date')}</span>
-          <DateField value={date} onChange={(d) => d !== '' && setDate(d)} today={today} quick={false} />
-        </div>
+        <DateGroup label={t('batch.date')} value={date} onChange={(d) => d !== '' && setDate(d)} today={today} quick={false} />
         <Field label={t('batch.control')} {...(control.status === 'invalid' ? { error: t('amount.invalid') } : {})}>
           <Input
+            ref={controlRef}
             className="num"
             inputMode="decimal"
             autoComplete="off"
             value={controlText}
             placeholder={t('batch.controlPlaceholder')}
-            onChange={(e) => setControlText(e.currentTarget.value)}
+            onChange={(e) => {
+              setControlText(e.currentTarget.value);
+              setSaveError(null);
+            }}
             onBlur={() => control.status === 'ok' && setControlText(formatExpression(control.expr, locale))}
           />
         </Field>

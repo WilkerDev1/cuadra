@@ -170,10 +170,12 @@ const BATCH_SELECT = `SELECT ${selectColumns('batches', 'b')},
   (SELECT COUNT(DISTINCT COALESCE(t.transfer_group_id, t.id)) FROM transactions t
      WHERE t.batch_id = b.id AND t.status = 'active') AS active_count,
   (SELECT COUNT(DISTINCT COALESCE(t.transfer_group_id, t.id)) FROM transactions t
-     WHERE t.batch_id = b.id AND t.status = 'voided') AS voided_count
+     WHERE t.batch_id = b.id AND t.status = 'voided') AS voided_count,
+  (SELECT COUNT(DISTINCT COALESCE(t.transfer_group_id, t.id)) FROM transactions t
+     WHERE t.batch_id = b.id AND t.status = 'voided' AND t.voided_with_batch = 1) AS restorable_count
   FROM batches b`;
 
-type BatchRow = BatchRecord & { active_count: number; voided_count: number };
+type BatchRow = BatchRecord & { active_count: number; voided_count: number; restorable_count: number };
 
 async function loadBatch(ex: SqlExecutor, id: Id): Promise<Batch> {
   const r = await ex.get<BatchRow>(`${BATCH_SELECT} WHERE b.id = ?`, [id]);

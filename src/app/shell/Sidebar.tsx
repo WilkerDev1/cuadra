@@ -1,11 +1,11 @@
 import { Lock, Search } from 'lucide-react';
 import { Fragment } from 'react';
-import { NavLink, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import { useT } from '../../i18n';
 import { IconButton } from '../../ui';
 import { useAuth } from '../data/auth';
 import { useNav } from '../registry/hooks';
-import { groupNav } from '../registry/select';
+import { groupNav, pickActiveNav } from '../registry/select';
 import type { NavEntry } from '../registry/types';
 import { useUiStore } from '../state/uiStore';
 import { Anotar } from './Anotar';
@@ -13,15 +13,17 @@ import { ThemeButton } from './ThemeToggle';
 import { resolveTo } from './workspaceLink';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
-function NavItem({ entry, wsId }: { entry: NavEntry; wsId: string | undefined }) {
+const navKey = (entry: NavEntry) => `${entry.scope}:${entry.id}`;
+
+function NavItem({ entry, wsId, active }: { entry: NavEntry; wsId: string | undefined; active: boolean }) {
   const t = useT();
   const { to, labelKey, icon: Icon } = entry;
   return (
     <li>
-      <NavLink to={resolveTo(entry.scope, to, wsId)} end={to === ''} title={t(labelKey)} viewTransition>
+      <Link to={resolveTo(entry.scope, to, wsId)} aria-current={active ? 'page' : undefined} title={t(labelKey)} viewTransition>
         <Icon aria-hidden size={20} />
         <span>{t(labelKey)}</span>
-      </NavLink>
+      </Link>
     </li>
   );
 }
@@ -45,6 +47,15 @@ export function Sidebar() {
     ...groupNav([...wsMore, ...rootMore]).map((g) => g.entries),
   ].filter((g) => g.length > 0);
   const footer = [...wsSettings, ...rootSettings];
+  // Una sola entrada activa: la de ruta más larga que coincida (DESIGN §8.3, el indicador lima va una vez).
+  const { pathname } = useLocation();
+  const all = [...blocks.flat(), ...footer];
+  const activeIndex = pickActiveNav(
+    all.map((e) => resolveTo(e.scope, e.to, wsId)),
+    pathname,
+    all.map((e) => e.to === ''),
+  );
+  const activeKey = activeIndex < 0 ? null : navKey(all[activeIndex] as NavEntry);
   return (
     <aside className="sidebar">
       <div className="sidebar__top">
@@ -62,7 +73,7 @@ export function Sidebar() {
           <Fragment key={entries[0]?.id ?? index}>
             <ul>
               {entries.map((entry) => (
-                <NavItem key={`${entry.scope}:${entry.id}`} entry={entry} wsId={wsId} />
+                <NavItem key={navKey(entry)} entry={entry} wsId={wsId} active={navKey(entry) === activeKey} />
               ))}
             </ul>
           </Fragment>
@@ -72,7 +83,7 @@ export function Sidebar() {
         {footer.length === 0 ? null : (
           <ul>
             {footer.map((entry) => (
-              <NavItem key={`${entry.scope}:${entry.id}`} entry={entry} wsId={wsId} />
+              <NavItem key={navKey(entry)} entry={entry} wsId={wsId} active={navKey(entry) === activeKey} />
             ))}
           </ul>
         )}

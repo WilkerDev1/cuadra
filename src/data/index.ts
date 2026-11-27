@@ -88,7 +88,24 @@ export interface OpenDatabaseDeps {
   lifecycle?: Pick<Window, 'addEventListener' | 'removeEventListener'> | null;
 }
 
-type TauriModule = { openTauriDriver: () => Promise<SqlDriver> };
+type TauriModule = {
+  openTauriDriver: () => Promise<SqlDriver>;
+  saveFileDialog: (suggestedName: string, data: string | Uint8Array) => Promise<string | null>;
+};
+
+/** Guarda un archivo con el diálogo nativo: ruta elegida, o null si se canceló. */
+export type NativeFileSaver = (suggestedName: string, data: Uint8Array) => Promise<string | null>;
+
+/**
+ * En Tauri, el diálogo nativo de «Guardar como» (comando `save_file`): el webview no descarga enlaces `blob:`
+ * de forma fiable. En el navegador, null (se usa la descarga normal).
+ */
+export async function nativeFileSaver(): Promise<NativeFileSaver | null> {
+  const load = tauriLoaders['./tauri/tauriDriver.ts'];
+  if (!detectTauri() || !load) return null;
+  const mod = await load();
+  return (name, data) => mod.saveFileDialog(name, data);
+}
 // Si src/data/tauri/tauriDriver.ts no existe, el glob queda vacío y el build no se rompe.
 // Cuando 3G lo cree con `export async function openTauriDriver(): Promise<SqlDriver>`, entra solo.
 const tauriLoaders = import.meta.glob<TauriModule>('./tauri/tauriDriver.ts');

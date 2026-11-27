@@ -27,6 +27,11 @@ export type ShortcutAction =
 export interface ShortcutContext {
   quickActions: readonly QuickAction[];
   goEntries: readonly NavEntry[];
+  /**
+   * Atajos de una sola tecla (letras, «/», «?», «g» + letra). Por defecto activos; quien dicta por voz o pulsa
+   * teclas sin querer los apaga en «Más» o en la hoja de atajos (WCAG 2.1.4). Ctrl/⌘+K funciona siempre.
+   */
+  singleKey?: boolean;
 }
 
 export interface ShortcutState {
@@ -80,7 +85,7 @@ export function resolveShortcut(
   if ((input.ctrlKey || input.metaKey) && !input.altKey && key.toLowerCase() === 'k') {
     return { action: { type: 'palette' }, state: cleared, consumed: true };
   }
-  if (input.ctrlKey || input.metaKey || input.altKey || input.typing || input.modalOpen === true) {
+  if (input.ctrlKey || input.metaKey || input.altKey || input.typing || input.modalOpen === true || ctx.singleKey === false) {
     return none(cleared);
   }
   if (input.repeat === true || key.length !== 1) return none(state);
