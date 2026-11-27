@@ -111,9 +111,14 @@ cuadra/
     │   │   ├── index.ts         # [{ version: 1, name: 'init', sql }] (import '?raw')
     │   │   └── 001_init.sql
     │   ├── mutex.ts             # serializa llamadas y transacciones sobre una conexión
+    │   ├── serialDriver.ts      # SqlDriver común: mutex + BEGIN IMMEDIATE/COMMIT/ROLLBACK + errores
+    │   ├── errors.ts            # SqlError, DataError (fallos del adaptador), RAISE → DomainError
+    │   ├── sha256.ts            # checksum de migraciones en JS puro (crypto.subtle no existe en http://ip-lan)
     │   ├── wasm/
     │   │   ├── db.worker.ts     # sqlite-wasm + opfs-sahpool / :memory:+IDB
     │   │   ├── wasmDriver.ts    # SqlDriver sobre postMessage con ids
+    │   │   ├── protocol.ts      # mensajes worker ↔ cliente
+    │   │   ├── workerHost.ts    # lógica del worker (probable en Node con MessageChannel)
     │   │   ├── tabLock.ts       # navigator.locks + BroadcastChannel ("usar aquí")
     │   │   └── idbStore.ts      # get/put de bytes en IndexedDB (respaldo y copias automáticas)
     │   ├── node/
@@ -132,8 +137,9 @@ cuadra/
     │   ├── App.tsx              # providers + RouterProvider
     │   ├── boot.ts              # openDatabase → createCuadra → estado de arranque
     │   ├── router.tsx           # createHashRouter a partir del registro
-    │   ├── shell/               # layouts: AppShell, BottomTabs, Sidebar, Fab, WorkspaceSwitcher,
-    │   │                        # UpdatePrompt, TabLockScreen, BootError (privado del shell)
+    │   ├── shell/               # privado del shell: BootView (carga, «abierta en otra pestaña», cedida,
+    │   │                        # error), AppShell (+ avisos de solo-memoria y versión nueva), BottomTabs,
+    │   │                        # Sidebar, Fab, ToastHost, NotFound, WorkspaceStatus, bootInfo
     │   ├── registry/            # PÚBLICO para features
     │   │   ├── types.ts         # FeatureModule, FeatureRoute, NavEntry, QuickAction, HomeCardDef...
     │   │   ├── collect.ts       # import.meta.glob('../../features/*/index.ts', { eager: true })
@@ -636,7 +642,7 @@ export interface IdGen { next(): string }   // uuidv7
 
 Reglas de los adaptadores:
 
-- Al abrir: `PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL` (salvo OPFS: `TRUNCATE`); `PRAGMA busy_timeout = 3000`. Comprobar `sqlite_version() >= '3.45'` o lanzar `DomainError('sqlite_too_old')`.
+- Al abrir: `PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL` (salvo OPFS: `TRUNCATE`; `:memory:`: `MEMORY`); `PRAGMA busy_timeout = 3000`. Comprobar `sqlite_version() >= '3.45'` o lanzar `DomainError('sqlite_too_old')`.
 - Los errores `RAISE(ABORT, 'codigo')` llegan como texto; el adaptador los convierte en `DomainError(codigo)` si el mensaje coincide con un código conocido.
 - Ningún adaptador interpreta ni reescribe el SQL.
 
@@ -649,6 +655,7 @@ export interface CuadraDeps {
   clock?: Clock;                 // por defecto: reloj del sistema
   ids?: IdGen;                   // por defecto: uuidv7 con crypto.getRandomValues
   locale?: string;               // 'es-DO'
+  schemaVersion?: number;        // la da migrate() en boot/harness (el núcleo no ve src/data)
 }
 export function createCuadra(deps: CuadraDeps): Cuadra;
 
@@ -674,10 +681,11 @@ export interface Cuadra {
 ```
 
 ```ts
-// src/app/boot.ts (shell) — único sitio que conoce adaptadores
-const driver = await openDatabase({ onBlocked, onReleaseRequested });  // src/data/index.ts
-const cuadra = createCuadra({ driver, locale: 'es-DO' });
-// <CuadraProvider cuadra={cuadra}> … </CuadraProvider>
+// src/app/boot.ts (shell) — único sitio que conoce adaptadores. Corre fuera de React (main.tsx) para que
+// StrictMode no pida el candado dos veces; informa por onState: loading | blocked(takeOver) | ready | released(reopen) | error.
+const db = await openDatabase({ onBlocked, onReleaseRequested, onPersistError });  // src/data/index.ts → OpenedDatabase
+const cuadra = createCuadra({ driver: db, locale: 'es-DO', schemaVersion: db.schema.to });
+// <App cuadra info={{ storage: db.storage, schema: db.schema, … }}/> → <CuadraProvider> (una QueryClient por fachada)
 ```
 
 ```ts
@@ -794,7 +802,9 @@ export type ErrorCode =
   | 'backup_invalid' | 'backup_checksum' | 'backup_from_newer_version'
   | 'db_from_newer_version' | 'migration_failed' | 'migration_checksum'
   | 'currency_locked' | 'confirmation_mismatch' | 'sqlite_too_old'
-  | 'seq_not_reserved' | 'immutable_column' | 'delete_forbidden' | 'audit_append_only';
+  | 'seq_not_reserved' | 'immutable_column' | 'delete_forbidden' | 'audit_append_only'
+  | 'seq_decrease' | 'options_require_list_field'   // los lanzan triggers de 001_init.sql
+  | 'invalid_recipe' | 'not_implemented';           // receta inválida; stub de servicio
 
 export class DomainError extends Error {
   constructor(readonly code: ErrorCode, readonly details?: Record<string, unknown>) { super(code); }
@@ -1637,7 +1647,7 @@ Las tarjetas del inicio (saldo, flujo mensual, cuentas, recordatorio de respaldo
 /e/:wsId/ajustes/espacio|cuentas|campos|campos/:fieldId|vistas → settings
 ```
 
-Filtros activos y periodo van en la query string (`?periodo=this_month&cuenta=…&f=<base64url(JSON)>`) para que "atrás" y compartir enlace funcionen. Navegación: **móvil** barra inferior con 4 entradas `primary` (Inicio, Movimientos, Resumen, Más) y el botón "+" central con las `quickActions`; **escritorio (≥ 960 px)** barra lateral con selector de espacio arriba y las mismas entradas. View Transitions al navegar donde `document.startViewTransition` exista.
+Filtros activos y periodo van en la query string (`?periodo=this_month&cuenta=…&f=<base64url(JSON)>`) para que "atrás" y compartir enlace funcionen. Navegación: **móvil** barra inferior con 4 entradas `primary` (Inicio, Movimientos, Resumen, Más) y el botón "+" central con las `quickActions`; **escritorio (≥ 1024 px de contenedor, DESIGN §8.1)** barra lateral con selector de espacio arriba y las mismas entradas. View Transitions al navegar donde `document.startViewTransition` exista.
 
 El shell también resuelve: pantalla de arranque, `TabLockScreen` ("Cuadra está abierta en otra pestaña · Usar aquí"), `UpdatePrompt` del service worker (`registerType: 'prompt'`), `BootError` (sin OPFS ni IndexedDB → modo solo memoria con banner rojo "los datos no se guardarán").
 

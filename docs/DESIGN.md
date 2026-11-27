@@ -343,7 +343,7 @@ Toda cifra de dinero se pinta con el componente `AmountText`. Nadie formatea din
 
 ## 7. Iconos
 
-- Se usa **Phosphor Icons** (`@phosphor-icons/react`, MIT), con peso `regular` a 20px en filas y 24px en navegación, y `fill` para el destino activo de la navegación.
+- Se usa **Lucide** (`lucide-react`, ISC), a 20px en filas y 24px en navegación. Los nombres de esta guía que vienen de Phosphor se traducen a su equivalente Lucide (p. ej. banco → `Landmark`, anular → `Ban`, historial → `History`, saldo inicial → `Scale`).
 - Los iconos siempre van con texto, salvo en `IconButton`, que lleva `aria-label`. Nunca se ponen iconos dentro de círculos de color.
 - Iconos de referencia:
   - entrada `ArrowDownLeft`, salida `ArrowUpRight`, transferencia `ArrowsLeftRight`

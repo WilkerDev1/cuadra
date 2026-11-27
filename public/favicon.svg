@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Cuadra</title>
+  <rect width="512" height="512" fill="#123d27"/>
+  <path d="M148 148H364V364H148Z" fill="#cdee3f"/>
+  <path d="M148 148H364M364 148V364M364 364H148M148 364V148" fill="none" stroke="#f1f6e6" stroke-width="28" stroke-linecap="square" stroke-linejoin="miter"/>
+</svg>

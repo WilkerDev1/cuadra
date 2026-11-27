@@ -1,0 +1,6 @@
+/* Hoja única del sistema de diseño: tokens → base → componentes. */
+@import './tokens.css';
+@import './base.css';
+@import './primitives/primitives.css';
+@import './domain/domain.css';
+@import './charts/charts.css';

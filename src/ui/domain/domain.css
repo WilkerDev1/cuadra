@@ -1,0 +1,220 @@
+/* ==========================================================================
+   Dominio: cifras, teclado propio, sello, doble raya, tipo, cuenta, filtros, periodo.
+   ========================================================================== */
+
+/* ---------- AmountText (§5) ---------- */
+.ui-amount {
+  display: inline-flex; flex-direction: column; align-items: flex-end;
+  max-inline-size: 100%;
+  font-variant-numeric: var(--num);
+  white-space: nowrap;
+  color: var(--ink);
+}
+.ui-amount__figure { display: inline-flex; align-items: baseline; position: relative; }
+.ui-amount--in { color: var(--in); }
+.ui-amount--out { color: var(--out); }
+.ui-amount--xfer { color: var(--xfer); }
+.ui-amount--opening { color: var(--ink-2); }
+.ui-amount__glyph { inline-size: 0.9em; block-size: 0.9em; align-self: center; margin-inline-end: 0.2em; stroke-width: 2.25; }
+
+/* Tamaños */
+.ui-amount--row, .ui-amount--table, .ui-amount--m { font-weight: var(--w-medium); }
+.ui-amount--row { font-size: var(--t-body); }
+.ui-amount--table { font-size: var(--t-small); font-stretch: var(--wd-table); }
+.ui-amount--m { font-size: var(--t-h3); font-weight: var(--w-strong); }
+.ui-amount--l { font-size: var(--t-amount-l); font-weight: var(--w-figure); line-height: var(--lh-tight); letter-spacing: -0.01em; }
+.ui-amount--hero {
+  font-size: min(var(--t-hero), calc(100cqi / (var(--chars) * 0.56)));
+  font-stretch: clamp(62%, calc(100% - (var(--chars) - 9) * 6%), 100%);
+  font-weight: var(--w-figure);
+  line-height: var(--lh-tight);
+  letter-spacing: -0.02em;
+}
+/* Anatomía hero y L: símbolo 45% a la altura de mayúscula, decimales 55% arriba, signo 80%. */
+:is(.ui-amount--hero, .ui-amount--l) .ui-amount__symbol {
+  font-size: 0.45em; align-self: flex-start; margin-block-start: 0.16em; margin-inline-end: 0.08em;
+  color: var(--ink-3); font-weight: var(--w-strong); letter-spacing: 0;
+}
+:is(.ui-amount--hero, .ui-amount--l) .ui-amount__sign { font-size: 0.8em; margin-inline-end: 0.04em; position: relative; inset-block-start: -0.14em; }
+.ui-amount__frac--sup { font-size: 0.55em; font-weight: 450; align-self: flex-start; margin-block-start: 0.12em; letter-spacing: 0; }
+.ui-amount--forest { color: var(--on-forest); }
+.ui-amount--forest .ui-amount__symbol { color: var(--on-forest-2); }
+.ui-amount--hero.ui-amount--in .ui-amount__sign, .ui-amount--hero.ui-amount--out .ui-amount__sign { color: inherit; }
+
+/* Anulado: tachado, visible, no suma. */
+.ui-amount--voided { color: var(--ink-3); }
+.ui-amount--voided .ui-amount__figure { text-decoration: line-through 2px; text-decoration-color: var(--ink-3); }
+.ui-amount--voided .ui-amount__symbol { color: inherit; }
+
+/* Resaltador (§11.2): trazo lima DEBAJO de la cifra, nunca detrás de los dígitos. */
+.ui-amount--hl .ui-amount__figure::after {
+  content: ""; position: absolute; z-index: -1;
+  inset-inline: -0.06em; inset-block-end: calc(0.1em - var(--hl-drop));
+  block-size: var(--hl-h);
+  border-radius: 2px 6px 3px 5px;
+  background: linear-gradient(var(--lime), var(--lime)) no-repeat left / 100% 100%;
+  transform: skewX(-8deg);
+  animation: ui-hl var(--d-micro) var(--ease-out) both;
+}
+.ui-amount--hl .ui-amount__figure { isolation: isolate; }
+@keyframes ui-hl { from { background-size: 0% 100%; } }
+@media (prefers-reduced-motion: reduce) { .ui-amount--hl .ui-amount__figure::after { animation: none; } }
+
+/* Raya bajo la cifra (§5.6) */
+.ui-amount--rule-single::after, .ui-amount--rule-double::after {
+  content: ""; display: block; inline-size: 100%; margin-block-start: 0.15em;
+  border-block-start: var(--bw) solid var(--rule-strong);
+}
+.ui-amount--rule-double::after { block-size: 2px; border-block-end: var(--bw) solid var(--rule-strong); box-sizing: content-box; }
+
+/* ---------- DoubleRule y Total ---------- */
+.ui-rule { display: block; inline-size: 100%; border-block-start: var(--bw) solid var(--rule-strong); transform-origin: right; }
+.ui-rule--double { block-size: 2px; border-block-end: var(--bw) solid var(--rule-strong); box-sizing: content-box; }
+.ui-rule--animate { animation: ui-rule-draw var(--d-stamp) var(--ease-out) both; }
+@keyframes ui-rule-draw { from { transform: scaleX(0); } }
+.ui-total { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); padding-block: var(--s-2); }
+.ui-total__label { font-weight: var(--w-strong); padding-block-start: 0.1em; }
+.ui-total--single .ui-total__label { font-weight: var(--w-medium); color: var(--ink-2); }
+
+/* ---------- Sello de cuadre (§11.1) ---------- */
+.ui-stamp { overflow: visible; }
+.ui-stamp__fill { fill: var(--lime); }
+.ui-stamp__side { fill: none; stroke: var(--ink); stroke-width: var(--stamp-stroke); stroke-linecap: square; }
+.ui-stamp--animate .ui-stamp__side {
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: ui-stamp-side calc(var(--d-stamp) * 0.2115) linear forwards;
+  animation-delay: calc(var(--i) * var(--d-stamp) * 0.2115);
+}
+.ui-stamp--animate .ui-stamp__fill { opacity: 0; animation: ui-fade-in-fill calc(var(--d-stamp) * 0.154) linear forwards; animation-delay: calc(var(--d-stamp) * 0.846); }
+@keyframes ui-stamp-side { to { stroke-dashoffset: 0; } }
+@keyframes ui-fade-in-fill { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .ui-stamp--animate .ui-stamp__side { animation: none; stroke-dashoffset: 0; }
+  .ui-stamp--animate .ui-stamp__fill { animation: none; opacity: 1; }
+}
+
+/* Sello ANULADO (§11.5) */
+.ui-stamp-void {
+  display: inline-block;
+  padding: 0.15em 0.5em;
+  border: var(--bw-2) solid var(--void);
+  border-radius: var(--r-1);
+  color: var(--void);
+  font-weight: 800; font-stretch: var(--wd-wide);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  rotate: -4deg;
+  opacity: .9;
+  mix-blend-mode: multiply;
+}
+:root[data-theme="dark"] .ui-stamp-void { mix-blend-mode: screen; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ui-stamp-void { mix-blend-mode: screen; } }
+
+/* ---------- KindBadge ---------- */
+.ui-kind { display: inline-flex; align-items: center; gap: var(--s-1); font-weight: var(--w-medium); font-size: var(--t-small); }
+.ui-kind svg { inline-size: 1rem; block-size: 1rem; stroke-width: 2.25; }
+.ui-kind--income { color: var(--in); }
+.ui-kind--expense { color: var(--out); }
+.ui-kind--transfer { color: var(--xfer); }
+.ui-kind--opening { color: var(--ink-2); }
+.ui-kind--lg { font-size: var(--t-h2); font-stretch: var(--wd-wide); font-weight: var(--w-title); gap: var(--s-2); }
+.ui-kind--lg svg { inline-size: 1.25em; block-size: 1.25em; }
+
+/* ---------- AccountChip ---------- */
+.ui-acct.ui-chip .ui-amount { font-size: var(--t-small); color: var(--ink-2); }
+.ui-acct.ui-chip[aria-pressed="true"] .ui-amount { color: inherit; }
+.ui-acct--card {
+  position: relative;
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1);
+  inline-size: 9.25rem; min-block-size: 6rem; flex-shrink: 0;
+  padding: var(--s-3);
+  border-radius: var(--r-2);
+  background: var(--surface); border: var(--bw) solid var(--rule);
+  box-shadow: var(--sh-1);
+  text-align: start;
+  scroll-snap-align: start;
+  transition: transform var(--d-press) var(--ease-out), border-color var(--d-micro) var(--ease-out);
+}
+.ui-acct--card:active { transform: scale(var(--press-scale)); }
+@media (hover: hover) { .ui-acct--card:hover { border-color: var(--control); } }
+.ui-acct--card[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 var(--bw) var(--ink); }
+.ui-acct__caption { font-size: var(--t-meta); color: var(--ink-3); }
+.ui-acct__head { display: flex; align-items: center; gap: var(--s-2); inline-size: 100%; color: var(--ink-2); }
+.ui-acct__head svg { inline-size: var(--icon-row); block-size: var(--icon-row); }
+.ui-acct__name { font-weight: var(--w-strong); color: var(--ink); }
+.ui-acct--card .ui-amount { align-items: flex-start; }
+.ui-acct.is-archived { opacity: .7; }
+.ui-acct.is-archived .ui-acct__name { color: var(--ink-3); }
+
+/* ---------- Teclado propio (§10.6) ---------- */
+.ui-keypad { display: flex; flex-direction: column; gap: var(--s-3); container-type: inline-size; }
+.ui-keypad__display {
+  display: grid; gap: var(--s-1);
+  min-block-size: 10rem; align-content: end;
+  padding-block: var(--s-2);
+}
+.ui-keypad__expr { justify-self: end; color: var(--ink-3); font-size: var(--t-small); min-block-size: 1.25rem; }
+.ui-keypad__row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); min-inline-size: 0; container-type: inline-size; }
+.ui-keypad__kind {
+  font-size: var(--t-h2); font-weight: var(--w-title); font-stretch: var(--wd-wide);
+  color: var(--kind-tone); padding-block-end: 0.35em; flex-shrink: 0;
+}
+.ui-keypad__value { min-inline-size: 0; flex: 1 1 auto; display: flex; justify-content: flex-end; container-type: inline-size; }
+.ui-keypad__value .ui-amount--hero { font-size: min(var(--t-hero), calc(100cqi / (var(--chars) * 0.6))); }
+.ui-keypad__value.is-shaking { animation: ui-shake 240ms var(--ease-inout); }
+@keyframes ui-shake { 0%, 100% { translate: 0; } 16%, 50%, 83% { translate: -4px; } 33%, 66% { translate: 4px; } }
+@media (prefers-reduced-motion: reduce) { .ui-keypad__value.is-shaking { animation: none; } }
+.ui-keypad__msg { justify-self: end; font-size: var(--t-meta); color: var(--warn-ink); font-weight: var(--w-medium); min-block-size: 1.1rem; }
+.ui-keypad__input {
+  position: absolute; inline-size: 1px; block-size: 1px; opacity: 0;
+  pointer-events: none; caret-color: transparent;
+}
+.ui-keypad__input.is-visible {
+  position: static; inline-size: 100%; block-size: auto; opacity: 1; pointer-events: auto;
+  min-block-size: var(--target); padding: 0 var(--s-3);
+  border: var(--bw) solid var(--control); border-radius: var(--r-1);
+  background: var(--surface); font-size: var(--t-h2); text-align: end; font-variant-numeric: var(--num);
+  caret-color: var(--ink);
+}
+.ui-keypad:has(.ui-keypad__input:focus-visible:not(.is-visible)) .ui-keypad__display {
+  outline: var(--bw-2) solid var(--focus-ring); outline-offset: 2px; box-shadow: 0 0 0 5px var(--focus-halo); border-radius: var(--r-2);
+}
+.ui-keypad__keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--key-gap); }
+.ui-key {
+  display: grid; place-items: center;
+  min-block-size: var(--key);
+  border-radius: var(--r-2);
+  background: var(--surface-2); color: var(--ink);
+  font-size: 1.5rem; font-weight: 560; font-variant-numeric: var(--num);
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  transition: transform var(--d-press) var(--ease-out), background-color var(--d-press) var(--ease-out);
+}
+.ui-key svg { inline-size: 1.5rem; block-size: 1.5rem; }
+.ui-key:active { transform: scale(var(--press-scale-key)); background: var(--sunken); }
+.ui-key--op, .ui-key--del { background: var(--sunken); color: var(--ink-2); }
+.ui-key--op:active, .ui-key--del:active { background: var(--rule); }
+@media (hover: hover) { .ui-key:hover { background: var(--sunken); } }
+.ui-keypad__actions { display: grid; grid-template-columns: 1fr 3fr; gap: var(--key-gap); }
+.ui-keypad__actions.is-single { grid-template-columns: 1fr; }
+.ui-keypad__actions .ui-btn { inline-size: 100%; }
+
+/* ---------- Filtros y periodo ---------- */
+.ui-filters {
+  position: relative;
+  display: flex; gap: var(--s-2); align-items: center;
+  overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
+  padding-block: var(--s-2);
+  margin-inline: calc(var(--gutter) * -1); padding-inline: var(--gutter);
+  scroll-padding-inline: var(--gutter);
+}
+.ui-filters > * { scroll-snap-align: start; }
+.ui-filters__add {
+  min-block-size: var(--chip-h); padding: 0 var(--s-3); border-radius: var(--r-1);
+  color: var(--accent-ink); font-size: var(--t-small); font-weight: var(--w-medium); white-space: nowrap; flex-shrink: 0;
+}
+@media (hover: hover) { .ui-filters__add:hover { background: var(--surface-2); } }
+.ui-period { display: inline-flex; }
+.ui-period__pop { inline-size: min(20rem, calc(100vw - 2 * var(--gutter))); padding: var(--s-2); }
+.ui-period__pop:not(:popover-open) { display: none; }
+.ui-period__presets { display: grid; }
+.ui-period__custom { display: grid; gap: var(--s-3); margin-block-start: var(--s-2); padding: var(--s-3) var(--s-2) var(--s-2); border-block-start: var(--bw) solid var(--rule); }
+.ui-period__custom legend { font-weight: var(--w-strong); font-size: var(--t-small); padding-block-start: var(--s-3); float: left; inline-size: 100%; }

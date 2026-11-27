@@ -1,0 +1,83 @@
+/* ==========================================================================
+   Gráficas SVG hechas a mano. Sin lima (DESIGN §6). Salidas con trama diagonal.
+   ========================================================================== */
+.ui-chart { margin: 0; display: grid; gap: var(--s-3); min-inline-size: 0; }
+.ui-chart__defs { position: absolute; }
+.ui-chart__out-bg { fill: var(--out-wash); }
+.ui-chart__out-hatch { fill: var(--chart-out); }
+.ui-chart__table summary {
+  display: inline-flex; align-items: center; min-block-size: var(--target);
+  color: var(--accent-ink); font-size: var(--t-small); font-weight: var(--w-medium); cursor: pointer;
+  list-style: none;
+}
+.ui-chart__table summary::-webkit-details-marker { display: none; }
+.ui-chart__table summary::before { content: "+"; inline-size: 1em; font-weight: var(--w-strong); }
+.ui-chart__table[open] summary::before { content: "\2212"; }
+.ui-chart__table .ui-table td { block-size: var(--fila-densa); }
+
+/* Barras horizontales */
+.ui-bars__list { display: grid; gap: var(--s-2); margin: 0; }
+.ui-bars__row {
+  display: grid; grid-template-columns: minmax(5rem, 9rem) 1fr auto; align-items: center; gap: var(--s-3);
+  min-block-size: 2rem;
+}
+.ui-bars__label { font-size: var(--t-small); color: var(--ink-2); }
+.ui-bars__track { inline-size: 100%; block-size: 0.875rem; overflow: visible; }
+.ui-bars__bar { transform-origin: left; animation: ui-bar-grow 320ms var(--ease-out) both; }
+.ui-bars__bar--in { fill: var(--chart-in); }
+@keyframes ui-bar-grow { from { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .ui-bars__bar { animation: none; } }
+.ui-bars__value { display: inline-flex; align-items: baseline; gap: var(--s-2); justify-content: flex-end; }
+.ui-bars__share { font-size: var(--t-meta); color: var(--ink-3); min-inline-size: 2.5em; text-align: end; }
+@container (width < 26rem) {
+  .ui-bars__row { grid-template-columns: 1fr auto; row-gap: var(--s-1); }
+  .ui-bars__track { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* Escalera */
+.ui-ladder__readout {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-3);
+  min-block-size: 1.75rem; font-size: var(--t-small);
+}
+.ui-ladder__day { font-weight: var(--w-strong); }
+.ui-ladder__bal { display: inline-flex; gap: var(--s-1); align-items: baseline; color: var(--ink-2); }
+.ui-ladder__plot { inline-size: 100%; overflow: hidden; }
+.ui-ladder__svg { display: block; touch-action: pan-y; cursor: crosshair; border-radius: var(--r-1); }
+.ui-ladder__svg:focus-visible { outline-offset: 4px; }
+.ui-ladder__in { fill: var(--chart-in); }
+.ui-ladder__out { stroke: var(--chart-out); stroke-width: 1; }
+.ui-ladder__day-g { transform-box: fill-box; transition: opacity var(--d-micro) var(--ease-out); }
+.ui-ladder__day-g.is-dim { opacity: .55; }
+.ui-ladder__day-g.is-active rect { fill: var(--chart-select); stroke: var(--chart-select); }
+.ui-ladder__axis { stroke: var(--rule-strong); stroke-width: 1; }
+.ui-ladder__cursor { stroke: var(--rule-strong); stroke-width: 1; }
+.ui-ladder__balance { fill: none; stroke: var(--chart-line); stroke-width: 2; stroke-linejoin: round; }
+
+/* Dona */
+.ui-donut { grid-template-columns: minmax(8rem, 11rem) 1fr; align-items: center; column-gap: var(--s-6); }
+.ui-donut .ui-chart__table { grid-column: 1 / -1; }
+.ui-donut__body { position: relative; }
+.ui-donut__svg { inline-size: 100%; block-size: auto; }
+.ui-donut__track { fill: none; stroke: var(--surface-2); stroke-width: 18; }
+.ui-donut__full { fill: none; stroke-width: 18; }
+.ui-donut__seg { stroke: var(--surface); stroke-width: 1.5; }
+.ui-donut__center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; justify-items: center; }
+.ui-donut__center .ui-amount--m { font-size: var(--t-small); }
+.ui-donut__legend { display: grid; gap: var(--s-2); margin: 0; }
+.ui-donut__legend li { display: grid; grid-template-columns: auto 1fr auto; gap: var(--s-2); align-items: center; font-size: var(--t-small); }
+.ui-donut__dot { inline-size: 0.625rem; block-size: 0.625rem; border-radius: 2px; }
+@container (width < 24rem) { .ui-donut { grid-template-columns: 1fr; justify-items: center; } .ui-donut__legend { inline-size: 100%; } .ui-donut__body { inline-size: 10rem; } }
+
+/* Línea */
+.ui-line__plot { inline-size: 100%; overflow: hidden; }
+.ui-line__grid { stroke: var(--chart-grid); stroke-width: 1; }
+.ui-line__path { fill: none; stroke: var(--chart-line); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ui-line__dot { fill: var(--chart-line); }
+.ui-line__axis { display: flex; justify-content: space-between; font-size: var(--t-meta); color: var(--ink-3); margin-block-start: var(--s-1); }
+
+/* Sparkline */
+.ui-spark { overflow: visible; }
+.ui-spark__path { fill: none; stroke: var(--chart-line); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.ui-spark__dot { fill: var(--chart-line); }
+.ui-spark--forest .ui-spark__path { stroke: var(--on-forest-2); }
+.ui-spark--forest .ui-spark__dot { fill: var(--on-forest); }

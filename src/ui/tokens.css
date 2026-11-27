@@ -1,0 +1,273 @@
+/* ==========================================================================
+   Cuadra · tokens · dirección «Renglón y Resaltador»
+   ========================================================================== */
+
+@import "@fontsource-variable/archivo/wdth.css"; /* familia 'Archivo Variable', wght 100–900, wdth 62–125 */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---------- Papel y tinta (claro: «papel de libreta») ---------- */
+  --bg:            oklch(0.975 0.010 135);  /* papel */
+  --surface:       oklch(0.995 0.004 135);  /* hoja: tarjetas, hojas inferiores, tabla */
+  --surface-2:     oklch(0.950 0.016 140);  /* filas alternas, chips en reposo, teclas */
+  --sunken:        oklch(0.930 0.020 140);  /* campos, pistas, fondo de vista previa */
+  --rule:          oklch(0.880 0.025 145);  /* renglones y separadores (decorativo) */
+  --rule-strong:   oklch(0.700 0.040 150);  /* doble raya, ejes */
+  --control:       oklch(0.620 0.035 150);  /* borde de input/checkbox: ≥3:1 */
+
+  --ink:           oklch(0.240 0.045 155);  /* texto principal 15:1 */
+  --ink-2:         oklch(0.420 0.035 155);  /* texto secundario 7.7:1 */
+  --ink-3:         oklch(0.520 0.030 155);  /* meta ≥4.7:1, nunca bajo 13px */
+
+  --forest:        oklch(0.310 0.070 155);  /* tarjeta de saldo, barra lateral */
+  --forest-2:      oklch(0.370 0.075 155);  /* hover/activo sobre forest */
+  --on-forest:     oklch(0.970 0.020 130);  /* 11.8:1 sobre forest */
+  --on-forest-2:   oklch(0.800 0.040 140);  /* 6.9:1 sobre forest */
+
+  /* ---------- Resaltador (único acento) ---------- */
+  --lime:          oklch(0.920 0.200 125);  /* SOLO relleno; encima siempre --on-lime */
+  --on-lime:       oklch(0.240 0.045 155);  /* 13:1 sobre lime */
+  --lime-press:    oklch(0.860 0.200 125);
+  --accent-ink:    oklch(0.480 0.130 140);  /* enlaces y texto de acento sobre claro 5.8:1 */
+
+  /* ---------- Semánticos (tinta de libro) ---------- */
+  --in:            oklch(0.480 0.110 165);  /* entrada: verde azulado, separado del bosque */
+  --in-wash:       oklch(0.950 0.035 165);
+  --out:           oklch(0.520 0.180 27);   /* salida: tinta roja */
+  --out-wash:      oklch(0.955 0.030 27);
+  --xfer:          oklch(0.500 0.120 255);  /* transferencia: tinta azul */
+  --xfer-wash:     oklch(0.950 0.025 255);
+  --warn-ink:      oklch(0.480 0.110 70);
+  --warn-wash:     oklch(0.930 0.070 85);
+  --void:          var(--out);              /* sello ANULADO */
+
+  /* ---------- Foco ---------- */
+  --focus-ring:    var(--ink);              /* contorno 2px */
+  --focus-halo:    oklch(0.920 0.200 125 / 0.9); /* halo lima 3px por fuera */
+
+  /* ---------- Gráficas ---------- */
+  --chart-in:      var(--in);
+  --chart-out:     var(--out);
+  --chart-line:    var(--ink);
+  --chart-grid:    var(--rule);
+  --chart-select:  var(--ink);
+  /* 8 tintas para lomos de Espacio y opciones de lista (croma baja, iguales en L) */
+  --tint-1: oklch(0.62 0.09 155); --tint-2: oklch(0.62 0.09 200);
+  --tint-3: oklch(0.62 0.09 250); --tint-4: oklch(0.62 0.09 300);
+  --tint-5: oklch(0.62 0.09 350); --tint-6: oklch(0.62 0.10 30);
+  --tint-7: oklch(0.66 0.10 75);  --tint-8: oklch(0.58 0.03 155);
+
+  /* ---------- Sombras (teñidas de bosque, nunca gris neutro) ---------- */
+  --sh-1: 0 1px 0 oklch(0.24 0.045 155 / 0.06), 0 1px 2px oklch(0.24 0.045 155 / 0.08);
+  --sh-2: 0 1px 0 oklch(0.24 0.045 155 / 0.06), 0 10px 28px -14px oklch(0.24 0.05 155 / 0.28);
+  --sh-sheet: 0 -8px 32px oklch(0.24 0.05 155 / 0.16);
+  --sh-inset: none;
+
+  /* ---------- Tipografía ---------- */
+  --font: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --num: tabular-nums lining-nums;              /* font-variant-numeric de toda cifra */
+
+  /* Escala fluida. cqi resuelve contra el contenedor más cercano (el shell como mínimo) */
+  --t-display: clamp(3.5rem, 2rem + 10cqi, 7rem);     /* «Cuadra.» en bienvenida */
+  --t-hero:    clamp(3.25rem, 1.5rem + 11cqi, 6.5rem); /* cifra protagonista */
+  --t-amount-l: clamp(1.875rem, 1.5rem + 1.5cqi, 2.5rem); /* saldo de cuenta, detalle */
+  --t-h1:      clamp(1.75rem, 1.45rem + 1.2cqi, 2.25rem);
+  --t-h2:      clamp(1.25rem, 1.15rem + 0.4cqi, 1.5rem);
+  --t-h3:      1.0625rem;
+  --t-body:    1rem;
+  --t-small:   0.875rem;   /* tabla escritorio, detalle */
+  --t-meta:    0.8125rem;  /* meta bajo filas */
+  --t-micro:   0.75rem;    /* cabeceras de tabla en mayúsculas, nada más */
+
+  --lh-tight: 1.05;  --lh-snug: 1.25;  --lh-body: 1.45;
+
+  /* Pesos y anchos (eje wdth = font-stretch) */
+  --w-body: 420;  --w-medium: 520;  --w-strong: 650;  --w-title: 720;  --w-figure: 760;  --w-display: 820;
+  --wd-wide: 112%;  --wd-normal: 100%;  --wd-table: 88%;  --wd-tight: 75%;  --wd-min: 62%;
+
+  /* ---------- Espaciado (base 4) ---------- */
+  --s-1: 0.25rem; --s-2: 0.5rem;  --s-3: 0.75rem; --s-4: 1rem;   --s-5: 1.25rem;
+  --s-6: 1.5rem;  --s-8: 2rem;    --s-10: 2.5rem; --s-12: 3rem;  --s-16: 4rem;
+  --gutter: 1rem;                 /* 16px móvil; 24px ≥600; 32px ≥1024 (ver shell) */
+
+  /* ---------- Densidad: la fila y el renglón del fondo usan el MISMO valor ---------- */
+  --fila: 3.5rem;                 /* 56px táctil */
+  --fila-densa: 2.5rem;
+  --key: 4rem;                    /* tecla del teclado: 64px */
+  --target: 3rem;                 /* objetivo táctil mínimo: 48px */
+
+  /* ---------- Radios (regla: los datos son rectos; lo que se toca, redondeado) ---------- */
+  --r-0: 0;          /* tablas, filas, cinta, renglones */
+  --r-1: 6px;        /* inputs, chips de filtro cuadrados, celdas activas */
+  --r-2: 14px;       /* tarjetas, teclas, botones grandes */
+  --r-3: 28px;       /* SOLO borde superior de hojas inferiores */
+  --r-pill: 999px;   /* SOLO chips de selección, botón Anotar, segmentado */
+
+  /* ---------- Bordes ---------- */
+  --bw: 1px;  --bw-2: 2px;
+
+  /* ---------- Capas (casi todo lo flotante va al top layer; esto es lo que no) ---------- */
+  --z-base: 0;  --z-sticky: 10;  --z-header: 20;  --z-nav: 30;  --z-fab: 40;
+
+  /* ---------- Movimiento ---------- */
+  --d-press: 90ms;     /* pulsación de tecla/botón */
+  --d-micro: 160ms;    /* hover, chips, interruptores */
+  --d-route: 240ms;    /* cambio de vista */
+  --d-sheet: 320ms;    /* hoja inferior y diálogo */
+  --d-count: 600ms;    /* conteo de totales */
+  --d-stamp: 520ms;    /* sello de cuadre, doble raya */
+  --d-fade-rm: 120ms;  /* sustituto con movimiento reducido */
+  --ease-out: cubic-bezier(.2, .9, .1, 1);
+  --ease-inout: cubic-bezier(.65, 0, .35, 1);
+  --ease-spring: var(--ease-out);   /* respaldo; ver @supports abajo. Solo para hojas */
+
+  /* ---------- Layout ---------- */
+  --nav-h: 4rem;            /* barra inferior, sin el safe area */
+  --rail-w: 4.5rem;         /* 72px */
+  --sidebar-w: 15.5rem;     /* 248px */
+  --inspector-w: 23.75rem;  /* 380px */
+  --content-max: 75rem;     /* 1200px */
+  --sheet-max-w: 40rem;     /* hojas en tableta/escritorio */
+}
+
+/* Las custom properties no validan su valor: el respaldo se hace con @supports, no repitiendo la declaración */
+@supports (transition-timing-function: linear(0, 1)) {
+  :root { --ease-spring: linear(0, .62 14%, 1.05 31%, .99 46%, 1); }
+}
+
+@media (pointer: fine) {
+  :root { --fila: 2.5rem; --fila-densa: 2rem; } /* 40px ratón, 32px compacta */
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+
+/* ---------- Oscuro: «pizarra de bosque» (no negro) ----------
+   Este bloque se aplica por elección manual (data-theme="dark").
+   El MISMO bloque se repite abajo dentro de
+   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { … } }
+   para seguir al sistema. Un test de tokens verifica que ambos sean idénticos. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg:          oklch(0.180 0.025 155);
+  --surface:     oklch(0.220 0.030 155);
+  --surface-2:   oklch(0.260 0.035 155);
+  --sunken:      oklch(0.155 0.020 155);
+  --rule:        oklch(0.320 0.035 155);
+  --rule-strong: oklch(0.480 0.040 155);
+  --control:     oklch(0.520 0.040 155);
+  --ink:         oklch(0.950 0.015 130);
+  --ink-2:       oklch(0.780 0.025 140);
+  --ink-3:       oklch(0.680 0.025 145);
+  --forest:      oklch(0.270 0.060 155);
+  --forest-2:    oklch(0.320 0.065 155);
+  --on-forest:   oklch(0.970 0.020 130);
+  --on-forest-2: oklch(0.800 0.040 140);
+  --lime:        oklch(0.900 0.200 125);
+  --on-lime:     oklch(0.220 0.050 140);
+  --lime-press:  oklch(0.840 0.200 125);
+  --accent-ink:  oklch(0.880 0.180 125);   /* en oscuro el lima SÍ puede ser texto */
+  --in:          oklch(0.800 0.130 165);   /* menta, separada del lima */
+  --in-wash:     oklch(0.280 0.050 165);
+  --out:         oklch(0.750 0.150 30);
+  --out-wash:    oklch(0.290 0.060 30);
+  --xfer:        oklch(0.780 0.100 250);
+  --xfer-wash:   oklch(0.280 0.045 250);
+  --warn-ink:    oklch(0.840 0.130 85);
+  --warn-wash:   oklch(0.300 0.060 85);
+  --focus-ring:  oklch(0.900 0.200 125);
+  --focus-halo:  oklch(0.900 0.200 125 / 0.35);
+  --sh-1: none;
+  --sh-2: inset 0 1px 0 oklch(1 0 0 / 0.06);
+  --sh-sheet: inset 0 1px 0 oklch(1 0 0 / 0.08), 0 -8px 32px oklch(0 0 0 / 0.35);
+  --sh-inset: inset 0 1px 0 oklch(1 0 0 / 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg:          oklch(0.180 0.025 155);
+    --surface:     oklch(0.220 0.030 155);
+    --surface-2:   oklch(0.260 0.035 155);
+    --sunken:      oklch(0.155 0.020 155);
+    --rule:        oklch(0.320 0.035 155);
+    --rule-strong: oklch(0.480 0.040 155);
+    --control:     oklch(0.520 0.040 155);
+    --ink:         oklch(0.950 0.015 130);
+    --ink-2:       oklch(0.780 0.025 140);
+    --ink-3:       oklch(0.680 0.025 145);
+    --forest:      oklch(0.270 0.060 155);
+    --forest-2:    oklch(0.320 0.065 155);
+    --on-forest:   oklch(0.970 0.020 130);
+    --on-forest-2: oklch(0.800 0.040 140);
+    --lime:        oklch(0.900 0.200 125);
+    --on-lime:     oklch(0.220 0.050 140);
+    --lime-press:  oklch(0.840 0.200 125);
+    --accent-ink:  oklch(0.880 0.180 125);   /* en oscuro el lima SÍ puede ser texto */
+    --in:          oklch(0.800 0.130 165);   /* menta, separada del lima */
+    --in-wash:     oklch(0.280 0.050 165);
+    --out:         oklch(0.750 0.150 30);
+    --out-wash:    oklch(0.290 0.060 30);
+    --xfer:        oklch(0.780 0.100 250);
+    --xfer-wash:   oklch(0.280 0.045 250);
+    --warn-ink:    oklch(0.840 0.130 85);
+    --warn-wash:   oklch(0.300 0.060 85);
+    --focus-ring:  oklch(0.900 0.200 125);
+    --focus-halo:  oklch(0.900 0.200 125 / 0.35);
+    --sh-1: none;
+    --sh-2: inset 0 1px 0 oklch(1 0 0 / 0.06);
+    --sh-sheet: inset 0 1px 0 oklch(1 0 0 / 0.08), 0 -8px 32px oklch(0 0 0 / 0.35);
+    --sh-inset: inset 0 1px 0 oklch(1 0 0 / 0.06);
+  }
+}
+
+/* ---------- Colores forzados ---------- */
+@media (forced-colors: active) {
+  :root {
+    --bg: Canvas; --surface: Canvas; --surface-2: Canvas; --sunken: Canvas;
+    --ink: CanvasText; --ink-2: CanvasText; --ink-3: GrayText;
+    --rule: GrayText; --rule-strong: CanvasText; --control: ButtonBorder;
+    --forest: Canvas; --on-forest: CanvasText; --on-forest-2: CanvasText;
+    --lime: Highlight; --on-lime: HighlightText; --accent-ink: LinkText;
+    --in: CanvasText; --out: CanvasText; --xfer: CanvasText; --warn-ink: CanvasText;
+    --focus-ring: Highlight; --focus-halo: transparent;
+  }
+}
+
+/* ---------- Movimiento reducido ---------- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --d-route: var(--d-fade-rm); --d-sheet: var(--d-fade-rm);
+    --d-count: 0ms; --d-stamp: 0ms; --d-press: 0ms;
+    --ease-spring: linear;
+  }
+}
+
+/* ---------- Extensiones de componentes (pendiente de copiar a DESIGN.md §3) ----------
+   Medidas que DESIGN.md describe en prosa (§9, §10.6, §14) y que los componentes necesitan
+   como token para no escribir valores sueltos. */
+:root {
+  --d-exit: 200ms;                 /* salida de hojas y popovers (§14) */
+  --sheet-h-half: 50dvh;           /* alturas de hoja inferior (§9) */
+  --sheet-h-tall: 85dvh;
+  --sheet-h-full: 100dvh;
+  --sheet-side-w: 26.25rem;        /* hoja lateral derecha: 420px (§8.1) */
+  --dialog-max-w: 28rem;           /* Dialog centrado (§9) */
+  --handle-w: 2.25rem;  --handle-h: 0.25rem;  /* asa de la hoja: 36×4px */
+  --chip-h: 2.25rem;               /* chip visible 36px; objetivo táctil ampliado a --target */
+  --key-gap: var(--s-2);           /* separación entre teclas: 8px */
+  --icon-row: 1.25rem;  --icon-nav: 1.5rem;  --icon-tip: 1rem;  /* 20/24/16px (§7) */
+  --spinner: 1rem;                 /* 16px (§9 Button cargando) */
+  --hl-h: 0.18em;  --hl-drop: 0.08em;   /* resaltador (§11.2) */
+  --stamp-stroke: 3px;             /* sello de cuadre (§11.1) */
+  --select-bar: 3px;               /* indicador del tipo en Segmented / barra lateral */
+  --press-scale: .97;  --press-scale-key: .94;
+  --disabled-opacity: .45;
+  --spine-w: 0.5rem;               /* franja de lomo: 8px (§10.1, §10.2) */
+  --chart-h: 10rem;                /* Escalera en Inicio: 160px (§10.3) */
+  --swipe-action-w: 5.5rem;
+  --menu-min-w: 12rem;
+  --toast-max-w: 30rem;
+  --scrim: oklch(0.180 0.040 155 / 0.42);   /* fondo de hojas y diálogos */
+  --scrim-0: oklch(0.180 0.040 155 / 0);
+}
