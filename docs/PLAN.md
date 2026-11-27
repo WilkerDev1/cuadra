@@ -78,6 +78,6 @@ Los documentos de origen (inventario, especificación v2 y su análisis crítico
 | 2 | Núcleo de dominio con pruebas (dinero, cuentas, movimientos, campos, consultas, historial, plantillas, respaldo, importación) | 1 |
 | 3 | Pantallas por área funcional en paralelo (inicio, cuentas, captura, resumen, informes, configuración, respaldo, onboarding) | 1, 2 |
 | 4 | Integración, datos de ejemplo, revisión adversarial, pruebas en navegador, correcciones | 3 |
-| 5 | Cáscara Tauri, documentación, publicación | 4 |
+| 5 | Documentación y publicación (la cáscara Tauri se hizo en la ola 4) | 4 |
 
 El detalle técnico está en [ARCHITECTURE.md](ARCHITECTURE.md), el visual en [DESIGN.md](DESIGN.md) y las fuentes estudiadas en [RESEARCH.md](RESEARCH.md).
