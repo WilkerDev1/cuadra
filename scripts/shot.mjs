@@ -3,7 +3,8 @@
 //
 //   node scripts/shot.mjs --profile mio --path '/e/@colmado' --size 1440x900 --scheme dark --out docs/screens/x.png
 //
-// --profile  nombre del perfil de navegador (guarda la base entre corridas; usa uno propio por tarea)
+// --profile  nombre del perfil de navegador para conservar la base entre corridas. Sin él, el perfil es
+//            temporal y se borra al cerrar (cada perfil con datos de ejemplo pesa cientos de MB en /tmp)
 // --path     ruta hash. `@colmado`, `@despacho`, `@personal`, `@iglesia` se sustituyen por el id del espacio de ejemplo
 // --size     ANCHOxALTO (390x844 activa modo táctil)          --scheme  light | dark
 // --full     página completa                                   --wait    ms extra antes de capturar
@@ -11,7 +12,7 @@
 // --no-seed  no cargar datos de ejemplo                         --base    URL (por defecto http://localhost:5199)
 // --reset    borra el perfil antes de empezar
 import { chromium } from '@playwright/test';
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -41,9 +42,12 @@ export function findChromium() {
 const PROFILE_NAMES = { colmado: 'Colmado', despacho: 'Estudio', personal: 'Mis finanzas', iglesia: 'Iglesia' };
 
 /** Abre la app con un perfil persistente y carga los datos de ejemplo si la base está vacía. */
-export async function openApp({ profile = 'default', size = '1440x900', scheme = 'light', base = 'http://localhost:5199', seed = true, reset = false } = {}) {
+export async function openApp({ profile, size = '1440x900', scheme = 'light', base = 'http://localhost:5199', seed = true, reset = false } = {}) {
   const [width, height] = size.split('x').map(Number);
-  const dir = join(tmpdir(), 'cuadra-shots', profile);
+  const root = join(tmpdir(), 'cuadra-shots');
+  mkdirSync(root, { recursive: true });
+  const ephemeral = !profile;
+  const dir = ephemeral ? mkdtempSync(join(root, 'tmp-')) : join(root, profile);
   if (reset) rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   const mobile = width < 600;
@@ -81,13 +85,18 @@ export async function openApp({ profile = 'default', size = '1440x900', scheme =
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(500);
   };
-  return { context, page, ids, errors, go };
+  /** Cierra el navegador y, si el perfil era temporal, lo borra. */
+  const close = async () => {
+    await context.close();
+    if (ephemeral) rmSync(dir, { recursive: true, force: true });
+  };
+  return { context, page, ids, errors, go, close };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const out = one('out', 'shot.png');
   const app = await openApp({
-    profile: one('profile', 'default'),
+    profile: one('profile', undefined),
     size: one('size', '1440x900'),
     scheme: one('scheme', 'light'),
     base: one('base', 'http://localhost:5199'),
@@ -106,6 +115,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`espacios: ${JSON.stringify(app.ids)}`);
     if (app.errors.length > 0) console.log(`errores de consola (${app.errors.length}):\n${app.errors.slice(0, 15).join('\n')}`);
   } finally {
-    await app.context.close();
+    await app.close();
   }
 }

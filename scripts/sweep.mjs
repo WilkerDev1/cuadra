@@ -7,7 +7,7 @@ const schemes = (process.env.SCHEMES ?? 'light,dark').split(',');
 const only = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 const results = [];
 for (const size of sizes) for (const scheme of schemes) {
-  const app = await openApp({ profile: 'sweep', size, scheme });
+  const app = await openApp({ size, scheme });
   const { page, ids } = app;
   const warns = [];
   page.on('console', (m) => { if (m.type() === 'warning' && /i18n/.test(m.text())) warns.push(m.text()); });
@@ -63,7 +63,7 @@ for (const size of sizes) for (const scheme of schemes) {
     results.push({ size, scheme, r, ...m, errors: [...app.errors], warns: [...warns] });
     if (bad) console.log(`${size} ${scheme} ${r.replace(/[0-9a-f-]{36}/g, ':id')} over=${m.over} ${m.culprits.join(' ')} keys=${m.keys.join(',')} errs=${app.errors.slice(0, 2).map((e) => e.slice(0, 160)).join(' | ')} warns=${warns.slice(0,2).join('|')}`);
   }
-  await app.context.close();
+  await app.close();
 }
 const bad = results.filter((x) => x.errors.length || x.over > 0 || x.keys.length || x.warns.length);
 console.log(`visitas ${results.length}, con problemas ${bad.length}`);
