@@ -28,10 +28,16 @@ import { getLocale } from '../../i18n/format';
 import { useCuadra } from './CuadraProvider';
 import { queryDefs, TX_TABLES } from './queryDefs';
 import { useCuadraQuery } from './useCuadraQuery';
+import { useUiStore, type UiState } from '../state/uiStore';
 
 export { useBootInfo } from './bootInfo';
 export { useAuth, type UseAuth, type AuthStatus } from './auth';
 export type { TxPage } from './queryDefs';
+
+/** Encola un aviso (toast) del shell: `{ message: clave i18n, params?, tone?, undo? }`. Devuelve su id. */
+export function usePushToast(): UiState['pushToast'] {
+  return useUiStore((s) => s.pushToast);
+}
 
 type Q<T> = UseQueryResult<T, DomainError>;
 
@@ -80,6 +86,11 @@ export function useBalanceSeries(input: { accountIds?: Id[]; period: Parameters<
 
 export function useFields(opts?: { includeInactive?: boolean }): Q<Field[]> {
   return useCuadraQuery(queryDefs.fields(useWorkspaceId(), opts));
+}
+
+/** Campos con lo que permiten en Resumen y filtros (`groupable`, `filterable`). */
+export function useFieldDimensions(): Q<Array<Field & { groupable: boolean; filterable: boolean }>> {
+  return useCuadraQuery(queryDefs.fieldDimensions(useWorkspaceId()));
 }
 
 /** Las opciones de un campo de lista (activas, o todas con `includeInactive`). Comparte caché con `useFields`. */

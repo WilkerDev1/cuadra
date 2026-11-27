@@ -35,13 +35,15 @@ export interface InspectorPanelProps {
   onClose: () => void;
   /** Cambios sin guardar: cerrar pide confirmación. */
   dirty?: boolean;
+  /** Altura de la hoja inferior en móvil. Por defecto `tall`. */
+  height?: 'half' | 'tall' | 'full';
   headerAction?: ReactNode;
   footer?: ReactNode;
   children?: ReactNode;
 }
 
 /** Contenido del inspector: portal al panel fijo si hay sitio; hoja en caso contrario. */
-export function InspectorPanel({ title, onClose, dirty = false, headerAction, footer, children }: InspectorPanelProps) {
+export function InspectorPanel({ title, onClose, dirty = false, height = 'tall', headerAction, footer, children }: InspectorPanelProps) {
   const { mode, target, claim } = useContext(InspectorContext);
   const inspector = mode === 'inspector' && target !== null;
 
@@ -56,7 +58,7 @@ export function InspectorPanel({ title, onClose, dirty = false, headerAction, fo
         onClose={onClose}
         title={title}
         variant="auto"
-        height="tall"
+        height={height}
         dirty={dirty}
         {...(headerAction === undefined ? {} : { headerAction })}
         {...(footer === undefined ? {} : { footer })}

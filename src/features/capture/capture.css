@@ -1,0 +1,379 @@
+/* Captura: Nuevo movimiento, Transferencia, Captura en tabla y Ráfaga. Solo tokens; clases con prefijo `cap-`.
+   El layout responde a container queries (`cap-page`, `cap-entry`), nunca al viewport (DESIGN §8.1). */
+
+/* ───────────────────────── Comunes ───────────────────────── */
+.cap-meta { font-size: var(--t-meta); color: var(--ink-3); }
+.cap-error {
+  display: flex; gap: var(--s-2); align-items: flex-start;
+  font-size: var(--t-small); font-weight: var(--w-medium); color: var(--warn-ink);
+}
+.cap-label { font-size: var(--t-small); font-weight: var(--w-medium); color: var(--ink); }
+.cap-group { display: grid; gap: var(--s-2); min-inline-size: 0; }
+.cap-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; min-inline-size: 0; }
+.cap-chips--scroll {
+  flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity; scrollbar-width: none;
+  padding-block: var(--s-1);
+  /* el objetivo táctil de 48px de los chips sobresale: margen para que no se recorte */
+  margin-block: calc(var(--s-1) * -1);
+}
+.cap-chips--scroll::-webkit-scrollbar { display: none; }
+.cap-chips--scroll > * { scroll-snap-align: start; flex: none; }
+.cap-chip__inline { display: inline-flex; align-items: center; gap: var(--s-1); }
+.cap-chip__inline svg { inline-size: 1rem; block-size: 1rem; color: var(--ink-3); }
+.cap-chip--warn { box-shadow: inset 0 0 0 var(--bw-2) var(--warn-ink); }
+.cap-chip--suggest { max-inline-size: 16rem; }
+.cap-chip--suggest .ui-chip__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-fixed { display: inline-flex; align-items: center; gap: var(--s-1); }
+.cap-state { display: grid; gap: var(--s-3); justify-items: start; padding-block: var(--s-6); }
+.cap-state__text { font-size: var(--t-h3); color: var(--ink-2); }
+
+/* ───────────────────────── Formulario (escritorio, inspector) ───────────────────────── */
+.cap-entry { display: grid; gap: var(--s-4); min-inline-size: 0; container: cap-entry / inline-size; }
+.cap-form { display: grid; gap: var(--s-4); min-inline-size: 0; }
+.cap-form__amount .ui-input__control {
+  font-size: var(--t-h2); font-weight: var(--w-strong); text-align: end;
+  font-variant-numeric: var(--num);
+}
+.cap-form .ui-input:has(.cap-form__amount), .cap-form__amount { min-block-size: var(--target); }
+.cap-form__result {
+  display: flex; flex-direction: column; align-items: flex-end; gap: var(--s-1);
+  min-inline-size: 0; container-type: inline-size;
+  padding-block: var(--s-2) var(--s-1);
+}
+.cap-form__expr { font-size: var(--t-small); color: var(--ink-3); min-block-size: 1.25rem; }
+.cap-form__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.cap-form__actions > * { flex: 1 1 auto; }
+.cap-form__keys { font-size: var(--t-meta); color: var(--ink-3); }
+@media (pointer: coarse) { .cap-form__keys { display: none; } }
+
+.cap-fields { display: grid; gap: var(--s-4); }
+.cap-similar { display: grid; gap: var(--s-2); }
+
+/* Avisos suaves: línea discreta con icono, nunca una caja de color */
+.cap-warnings { display: grid; gap: var(--s-1); margin: 0; padding: 0; list-style: none; }
+.cap-warnings:empty { display: none; }
+.cap-warnings__item {
+  display: flex; gap: var(--s-2); align-items: flex-start;
+  font-size: var(--t-small); color: var(--warn-ink);
+}
+.cap-warnings__item svg { flex: none; inline-size: var(--icon-tip); block-size: var(--icon-tip); margin-block-start: 0.2em; }
+
+/* Cuentas */
+.cap-accounts--chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.cap-accounts--list { display: grid; }
+.cap-accounts__row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto var(--icon-row);
+  align-items: center; gap: var(--s-3);
+  min-block-size: var(--fila); padding-inline: var(--s-2);
+  border-block-end: var(--bw) solid var(--rule);
+  text-align: start; color: var(--ink);
+  border-radius: var(--r-0);
+}
+.cap-accounts__row:active { background: var(--surface-2); }
+@media (hover: hover) { .cap-accounts__row:hover { background: var(--surface-2); } }
+.cap-accounts__icon { inline-size: var(--icon-row); block-size: var(--icon-row); color: var(--ink-2); }
+.cap-accounts__name { font-weight: var(--w-medium); }
+.cap-accounts__check { inline-size: var(--icon-row); block-size: var(--icon-row); visibility: hidden; color: var(--ink); }
+.cap-accounts__row[aria-pressed="true"] { background: var(--surface-2); }
+.cap-accounts__row[aria-pressed="true"] .cap-accounts__check { visibility: visible; }
+
+.cap-panel {
+  display: grid; gap: var(--s-3);
+  padding: var(--s-3);
+  background: var(--surface); border: var(--bw) solid var(--rule); border-radius: var(--r-2);
+}
+
+/* ───────────────────────── Móvil: teclado propio y lavado del tipo ───────────────────────── */
+/* La hoja ENTERA (asa y barra del título incluidas) se tiñe con el lavado del tipo (DESIGN §6, §10.6) a través del
+   gancho `--sheet-tint` de la hoja; así no queda una franja blanca arriba ni abajo. */
+.ui-sheet:has(.cap-entry--keypad[data-kind="expense"]) { --sheet-tint: var(--out-wash); }
+.ui-sheet:has(.cap-entry--keypad[data-kind="income"]) { --sheet-tint: var(--in-wash); }
+.ui-sheet:has(.cap-entry--keypad[data-kind="transfer"]) { --sheet-tint: var(--xfer-wash); }
+.cap-entry--keypad {
+  --cap-wash: var(--sheet-tint, var(--bg));
+  /* Teclas de 64 px (DESIGN §10.6) que ceden en pantallas bajas (360×740) para que «Anotar» quepa sin scroll. */
+  --cap-key: clamp(3rem, 7.4dvh, var(--key));
+  display: flex; flex-direction: column;
+  gap: var(--s-2);
+  min-block-size: 100%;
+  padding-block-start: var(--s-1);
+}
+.cap-entry--keypad .ui-key { min-block-size: var(--cap-key); }
+.cap-entry--keypad .ui-keypad__actions .ui-btn--key { min-block-size: var(--cap-key); }
+.cap-entry--keypad > .ui-seg { position: sticky; inset-block-start: 0; z-index: var(--z-sticky); flex: none; }
+/* Calculadora: el visor ocupa el aire que sobra y el concepto, los chips y las teclas quedan abajo, al alcance del
+   pulgar (antes quedaba un hueco vacío bajo «Anotar»). */
+.cap-entry--keypad > .cap-amount { flex: 1 0 auto; display: flex; flex-direction: column; }
+.cap-amount { min-inline-size: 0; }
+.cap-amount .ui-keypad { gap: var(--s-2); flex: 1 0 auto; }
+.cap-amount .ui-keypad__display { min-block-size: 5.25rem; padding-block: 0; flex: 1 0 auto; }
+/* Anotar siempre a la vista: la fila de acciones se pega al pie de la hoja (sticky, no fixed) */
+.cap-entry--keypad:not(.cap-burst) .ui-keypad__actions {
+  position: sticky; inset-block-end: calc(var(--s-4) * -1); z-index: var(--z-sticky);
+  margin-inline: calc(var(--gutter) * -1);
+  padding: var(--s-2) var(--gutter) calc(var(--s-4) + var(--s-1));
+  background: var(--cap-wash);
+}
+.cap-desc { display: grid; gap: var(--s-2); min-inline-size: 0; }
+
+/* Filas de chips con scroll: se desvanecen por el lado donde queda más (modern-web-guidance
+   ui-atoms/scrollability-affordance-hints). Sin animaciones ligadas al scroll no hay fundido: el chip cortado
+   sigue indicando que hay más. */
+@property --cap-fade-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --cap-fade-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@supports (animation-timeline: scroll()) {
+  .cap-chips--scroll {
+    --cap-fade: 2.5rem;
+    scroll-padding-inline: var(--cap-fade);
+    mask:
+      linear-gradient(var(--ink), var(--ink)) no-clip subtract,
+      linear-gradient(to right, var(--ink), transparent) 0 0 / var(--cap-fade-start) 100% no-repeat no-clip,
+      linear-gradient(to right, transparent, var(--ink)) 100% 0 / var(--cap-fade-end) 100% no-repeat no-clip;
+    animation: cap-fade-in linear both, cap-fade-out linear both;
+    animation-timeline: scroll(self inline);
+    animation-range: 0 var(--cap-fade), calc(100% - var(--cap-fade)) 100%;
+  }
+}
+@keyframes cap-fade-in { to { --cap-fade-start: var(--cap-fade); } }
+@keyframes cap-fade-out { from { --cap-fade-end: var(--cap-fade); } }
+
+/* ───────────────────────── Transferencia ───────────────────────── */
+.cap-xfer__head {
+  display: flex; align-items: center; gap: var(--s-2);
+  font-weight: var(--w-strong); color: var(--xfer);
+}
+.cap-entry[data-kind="opening"] .cap-xfer__head { color: var(--ink-2); }
+.cap-xfer__head svg { inline-size: var(--icon-row); block-size: var(--icon-row); }
+.cap-xfer__pair {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center; gap: var(--s-2);
+}
+.cap-xfer__acct {
+  display: grid; gap: var(--s-1); align-content: center;
+  min-inline-size: 0; min-block-size: var(--s-16);
+  padding: var(--s-2) var(--s-3);
+  background: var(--surface); color: var(--ink);
+  border: var(--bw) solid var(--rule); border-radius: var(--r-2);
+  box-shadow: var(--sh-1); text-align: start;
+  transition: transform var(--d-press) var(--ease-out);
+}
+.cap-xfer__acct:active:not(:disabled) { transform: scale(var(--press-scale)); }
+.cap-xfer__acct:disabled { cursor: default; box-shadow: none; }
+@media (hover: hover) { .cap-xfer__acct:not(:disabled):hover { background: var(--surface-2); } }
+.cap-xfer__acct[aria-expanded="true"] { border-color: var(--ink); }
+.cap-xfer__caption { font-size: var(--t-meta); color: var(--ink-3); }
+.cap-xfer__name { display: flex; align-items: center; gap: var(--s-2); min-inline-size: 0; font-weight: var(--w-strong); }
+.cap-xfer__name svg { flex: none; inline-size: var(--icon-row); block-size: var(--icon-row); color: var(--ink-2); }
+.cap-xfer__name .cap-xfer__chev { inline-size: 1rem; block-size: 1rem; color: var(--ink-3); margin-inline-start: auto; }
+.cap-xfer__preview { display: grid; gap: var(--s-1); margin: 0; font-size: var(--t-small); color: var(--ink-2); }
+.cap-xfer__line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-3); align-items: baseline; }
+.cap-xfer__line dd { margin: 0; display: inline-flex; align-items: baseline; gap: var(--s-1); white-space: nowrap; }
+.cap-xfer__line .ui-amount { color: var(--ink-2); font-size: inherit; }
+.cap-xfer__line dt { color: var(--ink-2); }
+.cap-xfer__line .cap-xfer__before { color: var(--ink-3); }
+.cap-xfer__line .cap-xfer__after { color: var(--ink); font-weight: var(--w-medium); }
+.cap-xfer__arrow { color: var(--ink-3); }
+
+/* ───────────────────────── Cinta y minicinta ───────────────────────── */
+.cap-tape {
+  display: grid; align-content: start; gap: var(--s-3);
+  padding: var(--s-4);
+  background: var(--surface);
+  border: var(--bw) solid var(--rule);
+  border-radius: var(--r-0);
+  /* borde perforado arriba, como el papel de sumadora */
+  mask: radial-gradient(circle at 50% 0, transparent 0.25rem, var(--ink) 0.27rem) 0 0 / 0.75rem 100% repeat-x;
+  -webkit-mask: radial-gradient(circle at 50% 0, transparent 0.25rem, var(--ink) 0.27rem) 0 0 / 0.75rem 100% repeat-x;
+  padding-block-start: var(--s-5);
+}
+@media (forced-colors: active) { .cap-tape { mask: none; -webkit-mask: none; } }
+.cap-tape__lines {
+  display: grid; margin: 0; padding: 0; list-style: none;
+  max-block-size: 24rem; overflow: auto;
+}
+.cap-tape__line, .cap-tape__empty {
+  display: flex; justify-content: flex-end;
+  min-block-size: var(--fila-densa); align-items: center;
+  border-block-end: var(--bw) solid var(--rule);
+  font-stretch: var(--wd-tight); font-weight: var(--w-medium);
+}
+.cap-tape__line .ui-amount { font-stretch: var(--wd-tight); }
+.cap-tape__empty { justify-content: flex-start; font-size: var(--t-small); color: var(--ink-3); font-stretch: var(--wd-normal); border: 0; }
+.cap-tape__foot { display: grid; gap: var(--s-1); }
+.cap-tape__total {
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-3);
+  font-size: var(--t-small); color: var(--ink-2);
+}
+.cap-tape__total--muted .ui-amount { color: var(--ink-2); }
+.cap-tape__total--warn, .cap-tape__total--warn .ui-amount { color: var(--warn-ink); font-weight: var(--w-strong); }
+.cap-tape__square { display: grid; gap: var(--s-2); justify-items: end; }
+.cap-tape__cuadra {
+  display: flex; align-items: center; gap: var(--s-3);
+  font-size: var(--t-h2); font-weight: var(--w-display); font-stretch: var(--wd-wide);
+}
+
+.cap-mini {
+  display: grid; gap: var(--s-2);
+  padding: var(--s-3);
+  background: var(--surface); border: var(--bw) solid var(--rule); border-radius: var(--r-1);
+}
+.cap-mini__lines { display: grid; margin: 0; padding: 0; list-style: none; }
+.cap-mini__line {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-3); align-items: center;
+  inline-size: 100%; min-block-size: var(--target);
+  border-block-end: var(--bw) solid var(--rule);
+  font-size: var(--t-small); text-align: start; color: var(--ink-2);
+}
+.cap-mini__line .ui-amount { font-stretch: var(--wd-tight); font-weight: var(--w-medium); }
+button.cap-mini__line[aria-pressed="true"] { background: var(--surface-2); box-shadow: inset var(--bw-2) 0 0 var(--ink); padding-inline-start: var(--s-2); }
+.cap-mini .cap-tape__cuadra { font-size: var(--t-h3); }
+
+/* ───────────────────────── Página de captura ───────────────────────── */
+.cap-page {
+  container: cap-page / inline-size;
+  display: grid; gap: var(--s-6);
+  inline-size: 100%; max-inline-size: var(--content-max); margin-inline: auto;
+  min-inline-size: 0;
+}
+.cap-page__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: var(--s-3); }
+
+.cap-bar {
+  display: grid; gap: var(--s-4); align-items: end;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+}
+@container cap-page (width >= 64rem) {
+  .cap-bar { grid-template-columns: minmax(12rem, 1.4fr) minmax(10rem, 1fr) auto minmax(9rem, 0.8fr) minmax(10rem, 1fr); }
+}
+.cap-bar .ui-field__help, .cap-bar .ui-datefield__future { display: none; }
+
+.cap-work { display: grid; gap: var(--s-4); min-inline-size: 0; }
+@container cap-page (width >= 60rem) {
+  .cap-work { grid-template-columns: minmax(0, 1fr) 18.75rem; align-items: start; }
+  .cap-work__tape { position: sticky; inset-block-start: var(--s-4); }
+}
+.cap-work__grid { display: grid; gap: var(--s-2); min-inline-size: 0; }
+.cap-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--s-3); }
+.cap-actions .cap-error, .cap-actions .cap-meta { margin-inline-end: auto; }
+
+/* Rejilla */
+.cap-grid {
+  overflow: auto; max-inline-size: 100%; max-block-size: min(36rem, 70dvh);
+  border: var(--bw) solid var(--rule-strong); border-radius: var(--r-0);
+  background: var(--surface);
+  overscroll-behavior: contain;
+}
+.cap-grid__table {
+  inline-size: 100%; border-collapse: separate; border-spacing: 0;
+  font-size: var(--t-small); font-stretch: var(--wd-table);
+}
+.cap-grid__table thead th {
+  position: sticky; inset-block-start: 0; z-index: var(--z-sticky);
+  background: var(--surface);
+  font-size: var(--t-micro); font-weight: var(--w-strong); text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--ink-2); text-align: start; white-space: nowrap;
+  padding: var(--s-2) var(--s-2);
+  border-block-end: var(--bw) solid var(--rule-strong);
+}
+.cap-grid__table thead th.cap-grid__h--amount, .cap-grid__table thead th.cap-grid__h--number { text-align: end; }
+.cap-grid__table tbody th, .cap-grid__table td { border-block-end: var(--bw) solid var(--rule); padding: 0; }
+.cap-grid__table tbody th.cap-grid__n { padding-inline: var(--s-2); }
+.cap-grid__n {
+  position: sticky; inset-inline-start: 0; z-index: 1;
+  inline-size: 3rem; min-inline-size: 3rem;
+  background: var(--surface);
+  color: var(--ink-3); font-weight: var(--w-body); font-size: var(--t-meta);
+  text-align: end;
+  border-inline-end: var(--bw) solid var(--rule);
+}
+.cap-grid__table thead .cap-grid__n { z-index: calc(var(--z-sticky) + 1); }
+.cap-grid__n { white-space: nowrap; }
+.cap-grid__flag { display: inline-flex; vertical-align: middle; margin-inline-start: var(--s-1); color: var(--warn-ink); }
+.cap-grid__flag svg { inline-size: var(--icon-tip); block-size: var(--icon-tip); }
+.cap-grid__x { inline-size: var(--target); min-inline-size: var(--target); text-align: center; }
+/* Monto y quitar fila siempre a la vista a la derecha, aunque haya muchas columnas de campos */
+.cap-grid__table :is(th, td).cap-grid__x {
+  position: sticky; inset-inline-end: 0; z-index: 1; background: var(--surface);
+}
+.cap-grid__table :is(th.cap-grid__h--amount, td.cap-cell--amount) {
+  position: sticky; inset-inline-end: var(--target); z-index: 1; background: var(--surface);
+  border-inline-start: var(--bw) solid var(--rule);
+}
+.cap-grid__table thead :is(th.cap-grid__h--amount, th.cap-grid__x) { z-index: calc(var(--z-sticky) + 1); }
+.cap-grid__x .ui-iconbtn { opacity: 0.6; }
+tr:focus-within .cap-grid__x .ui-iconbtn, .cap-grid__x .ui-iconbtn:focus-visible { opacity: 1; }
+@media (hover: hover) { tr:hover .cap-grid__x .ui-iconbtn { opacity: 1; } }
+
+.cap-cell { position: relative; min-inline-size: 8rem; }
+.cap-cell--bool { min-inline-size: 6rem; }
+.cap-cell--description { min-inline-size: 14rem; }
+.cap-cell--list { min-inline-size: 11rem; }
+.cap-cell--date { min-inline-size: 7.5rem; inline-size: 7.5rem; }
+.cap-cell--amount { min-inline-size: 8rem; inline-size: 9rem; }
+.cap-cell__input {
+  display: block; inline-size: 100%;
+  min-block-size: var(--fila);
+  padding: 0 var(--s-2);
+  background: transparent; border: 0; border-radius: var(--r-0);
+  color: var(--ink); font: inherit; font-stretch: inherit;
+}
+.cap-cell__input::placeholder { color: var(--ink-3); opacity: 1; }
+.cap-cell--num .cap-cell__input { text-align: end; font-variant-numeric: var(--num); }
+.cap-cell__input:focus-visible, .cap-cell__check:focus-visible {
+  outline: var(--bw-2) solid var(--focus-ring); outline-offset: -2px; box-shadow: none;
+  background: var(--surface-2); border-radius: var(--r-1);
+}
+.cap-cell__check {
+  display: block; margin-inline: auto;
+  inline-size: 1.25rem; block-size: 1.25rem; accent-color: var(--ink);
+}
+.cap-cell--warn { box-shadow: inset 0 0 0 var(--bw-2) var(--warn-ink); }
+.cap-grid__table tbody tr.is-error .cap-grid__n { color: var(--warn-ink); }
+@media (hover: hover) { .cap-grid__table tbody tr:hover > * { background-color: var(--surface-2); } }
+.cap-grid__table tbody tr:focus-within > * { background-color: var(--surface-2); }
+.cap-work__keys { font-size: var(--t-meta); }
+
+/* Lotes recientes */
+.cap-batches { display: grid; gap: var(--s-3); min-inline-size: 0; }
+.cap-batches__title { font-size: var(--t-h3); padding-block-end: var(--s-2); border-block-end: var(--bw) solid var(--rule-strong); }
+.cap-batches__list { display: grid; margin: 0; padding: 0; list-style: none; }
+.cap-batch {
+  display: grid; gap: var(--s-2) var(--s-4); align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "main figures" "actions actions";
+  padding-block: var(--s-3);
+  border-block-end: var(--bw) solid var(--rule);
+}
+@container cap-page (width >= 40rem) {
+  .cap-batch { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "main figures actions"; padding-block: var(--s-2); }
+}
+.cap-batch__main { grid-area: main; display: grid; gap: var(--s-1); min-inline-size: 0; }
+.cap-batch__name { font-weight: var(--w-medium); color: var(--ink); text-decoration: none; }
+.cap-batch__name:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.cap-batch__figures { grid-area: figures; display: flex; align-items: center; gap: var(--s-2); justify-content: flex-end; flex-wrap: wrap; }
+.cap-batch__actions { grid-area: actions; display: flex; justify-content: flex-end; }
+.cap-batch[data-voided] .cap-batch__name { color: var(--ink-3); text-decoration: line-through; }
+
+/* ───────────────────────── Ráfaga (móvil) ───────────────────────── */
+/* Es una página bajo la barra inferior: todo debe caber para que «Añadir línea» se vea sin bajar (DESIGN §10.9). */
+.cap-burst { --cap-wash: var(--bg); }
+.cap-burst__top { display: flex; align-items: center; gap: var(--s-2); min-inline-size: 0; }
+.cap-burst__top > .ui-seg { flex: none; }
+.cap-burst__close { margin-inline-start: auto; }
+.cap-burst__control-input .ui-input__control { text-align: end; font-variant-numeric: var(--num); }
+.cap-burst {
+  /* Página bajo dos barras: teclas un poco más bajas que en la hoja, nunca por debajo del objetivo de 48 px */
+  --cap-key: clamp(var(--target), 6.4dvh, var(--key));
+}
+.cap-burst .ui-keypad__display { min-block-size: 4rem; }
+.cap-page:has(.cap-burst) { gap: var(--s-2); }
+/* «Añadir línea» pegado justo encima de la barra inferior: siempre al alcance, nunca debajo de ella */
+.cap-burst .ui-keypad__actions {
+  position: sticky; inset-block-end: calc(var(--nav-h) + env(safe-area-inset-bottom)); z-index: var(--z-sticky);
+  margin-inline: calc(var(--gutter) * -1);
+  padding: var(--s-2) var(--gutter);
+  background: var(--bg);
+}
+/* En la Ráfaga, «Añadir línea» ya es la acción principal: la pastilla Anotar de la barra inferior sobraría
+   (un solo relleno lima por pantalla, DESIGN §6). */
+.shell:has(.cap-burst) .bottom-bar .anotar--pill { display: none; }

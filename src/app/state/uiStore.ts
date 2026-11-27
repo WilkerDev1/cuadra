@@ -19,7 +19,7 @@ export interface Toast {
 /** Superficies que se abren desde atajos o botones de distintas partes del shell. */
 export type Overlay = 'palette' | 'help' | 'fab';
 
-interface UiState {
+export interface UiState {
   theme: ThemeChoice;
   lastWorkspaceId: Id | null;
   toasts: Toast[];

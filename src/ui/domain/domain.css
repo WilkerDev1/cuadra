@@ -179,6 +179,8 @@
   outline: var(--bw-2) solid var(--focus-ring); outline-offset: 2px; box-shadow: 0 0 0 5px var(--focus-halo); border-radius: var(--r-2);
 }
 .ui-keypad__keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--key-gap); }
+.ui-keypad__keys[hidden] { display: none; }
+.ui-keypad__keys--reserve { visibility: hidden; }
 .ui-key {
   display: grid; place-items: center;
   min-block-size: var(--key);

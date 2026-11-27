@@ -3,7 +3,7 @@
 import type { LucideIcon } from 'lucide-react';
 import type { Currency, Id, Minor, WorkspaceSummary } from '../../core';
 import { normalizeSearch } from '../../core/text';
-import type { NavEntry, QuickAction } from '../registry/types';
+import type { NavEntry, QuickAction, SettingsSectionDef } from '../registry/types';
 import type { ThemeChoice } from '../state/uiStore';
 import { resolveTo } from './workspaceLink';
 
@@ -38,6 +38,8 @@ export interface PaletteSources {
   quickActions: readonly QuickAction[];
   /** Navegación del espacio actual (sin repetir) y de la raíz. */
   nav: readonly NavEntry[];
+  /** Secciones de ajustes: las que no tengan ya una entrada de navegación con el mismo destino también salen. */
+  sections?: readonly SettingsSectionDef[];
   workspaces: readonly WorkspaceSummary[];
   formatMoney: (minor: Minor, currency: Currency) => string;
   authEnabled: boolean;
@@ -63,12 +65,21 @@ export function buildPaletteItems(src: PaletteSources): PaletteItem[] {
     }
   }
 
-  for (const entry of src.nav) {
+  const seen = new Set<string>();
+  const destinations: NavEntry[] = [...src.nav];
+  for (const s of src.sections ?? []) {
+    destinations.push({ id: `settings:${s.id}`, scope: s.scope, to: s.to, labelKey: s.labelKey, icon: s.icon, placement: 'settings', order: s.order });
+  }
+  for (const entry of destinations) {
     if (entry.scope === 'workspace' && wsId === undefined) continue;
+    const dest = `${entry.scope}:${entry.to}`;
+    if (seen.has(dest)) continue;
+    seen.add(dest);
+    const fromSection = entry.id.startsWith('settings:');
     items.push({
       id: `go:${entry.scope}:${entry.id}`,
       section: 'go',
-      label: t('common.palette.goTo', { name: t(entry.labelKey) }),
+      label: t(fromSection ? 'common.palette.goToSetting' : 'common.palette.goTo', { name: t(entry.labelKey) }),
       ...(entry.goKey === undefined ? {} : { hint: `G ${entry.goKey.toUpperCase()}` }),
       keywords: [t(entry.labelKey)],
       icon: entry.icon,
@@ -127,6 +138,8 @@ export function scoreItem(item: PaletteItem, query: string): number {
 }
 
 export const MAX_RESULTS = 12;
+/** Espacios que se ven en la paleta sin búsqueda. */
+export const MAX_IDLE_WORKSPACES = 5;
 
 /** Sin búsqueda: todo agrupado por sección. Con búsqueda: mejor puntuación primero, y a igualdad el orden de sección. */
 export function filterPalette(items: readonly PaletteItem[], query: string, limit = MAX_RESULTS): PaletteItem[] {
@@ -134,8 +147,12 @@ export function filterPalette(items: readonly PaletteItem[], query: string, limi
   const q = normalizeSearch(query);
   if (q === '') {
     const sorted = [...items].sort((a, b) => sectionRank(a.section) - sectionRank(b.section));
-    // Sin búsqueda se muestran las acciones, los destinos y pocos espacios; el tema y lo demás sale al buscar.
-    return sorted.filter((i) => i.section !== 'app' || i.id === 'app:new-space' || i.id === 'app:help').slice(0, Math.max(limit, 14));
+    // Sin búsqueda se muestran todas las acciones y pantallas y pocos espacios; el tema y lo demás sale al buscar.
+    let spaces = 0;
+    return sorted.filter((i) => {
+      if (i.section === 'workspaces') return ++spaces <= MAX_IDLE_WORKSPACES;
+      return i.section !== 'app' || i.id === 'app:new-space' || i.id === 'app:help';
+    });
   }
   return items
     .map((item, index) => ({ item, index, score: scoreItem(item, q) }))

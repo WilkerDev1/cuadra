@@ -1,6 +1,7 @@
 // Arranque (ARCHITECTURE.md 3.1 y ADR-9): único sitio que conoce los adaptadores. Abre la base (candado
 // entre pestañas → OPFS → respaldo :memory:+IndexedDB → migrar) y crea la fachada del núcleo.
 import { createCuadra, type Cuadra } from '../core';
+import { setLocale } from '../i18n/format';
 import { createRestoreCopySink, DataError, openDatabase, type OpenDatabaseOptions, type OpenedDatabase, type StorageStatus } from '../data';
 
 export interface BootInfo {
@@ -64,6 +65,12 @@ export async function boot(hooks: BootHooks): Promise<void> {
       ...(typeof import.meta.env.VITE_APP_VERSION === 'string' ? { appVersion: import.meta.env.VITE_APP_VERSION } : {}),
       ...(autoCopy === undefined ? {} : { backupAutoCopy: autoCopy }),
     });
+    // El formato regional guardado (Ajustes de instalación) vale desde el primer pintado.
+    try {
+      setLocale(await cuadra.settings.get('locale'));
+    } catch {
+      // sin ajuste legible: se queda el de por defecto (es-DO)
+    }
     hooks.onState({
       status: 'ready',
       cuadra,

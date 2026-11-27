@@ -38,6 +38,11 @@ export interface AmountKeypadProps {
   children?: ReactNode;
   /** Usar el teclado del sistema (`inputmode="decimal"`) en lugar del propio (Ajustes, accesibilidad). */
   systemKeyboard?: boolean;
+  /**
+   * Oculta las teclas (el campo sigue): `collapse` las quita del flujo (un panel ocupa su sitio); `reserve` las deja
+   * invisibles conservando su alto (sin saltos al alternar).
+   */
+  hideKeys?: 'collapse' | 'reserve';
   /** Guardando: bloquea el envío. */
   busy?: boolean;
   /** Etiqueta del campo para lectores de pantalla. */
@@ -62,6 +67,7 @@ export const AmountKeypad = forwardRef<AmountKeypadHandle, AmountKeypadProps>(fu
     showKindWord = true,
     children,
     systemKeyboard = false,
+    hideKeys,
     busy = false,
     label,
   },
@@ -224,7 +230,12 @@ export const AmountKeypad = forwardRef<AmountKeypadHandle, AmountKeypadProps>(fu
       </span>
       {children}
       {systemKeyboard ? null : (
-        <div className="ui-keypad__keys" role="group" aria-label={t('ui.keypad.amount')}>
+        <div
+          className={cx('ui-keypad__keys', hideKeys === 'reserve' && 'ui-keypad__keys--reserve')}
+          role="group"
+          aria-label={t('ui.keypad.amount')}
+          hidden={hideKeys === 'collapse'}
+        >
           {keys.map((k) => (
             <button
               key={k.key}

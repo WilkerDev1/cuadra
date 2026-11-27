@@ -6,6 +6,7 @@
 // - Fechas de calendario como 'YYYY-MM-DD'; marcas del sistema como texto ISO.
 // - Los textos salen de `t(clave)`; si no hay traducción (t ausente o devuelve la clave) se usa el español
 //   por defecto de LABELS_ES, así la exportación nunca muestra claves crudas.
+import { toIsoDate } from '../dates';
 import { Money } from '../money';
 import type {
   Account,
@@ -352,6 +353,13 @@ export function auditToSheet(
 
 // ── Informes ─────────────────────────────────────────────────────────────────────────
 
+/** Marca de tiempo legible en hora local («2026-11-27 03:32»), no el ISO en UTC. Si no se puede leer, tal cual. */
+export function localStamp(ts: string): string {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  return `${toIsoDate(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 /** Informe completo como libro de hojas: resumen + estado, por cuenta, por campo, transferencias, movimientos… */
 export function reportToSheets(doc: ReportDocument, t?: Translate): Sheet[] {
   const taken = new Set<string>();
@@ -364,7 +372,7 @@ export function reportToSheets(doc: ReportDocument, t?: Translate): Sheet[] {
     [label(t, 'export.meta.workspace', { name: doc.meta.workspaceName }), null],
     ...(doc.meta.ownerName ? [[label(t, 'export.meta.owner', { name: doc.meta.ownerName }), null]] : []),
     [label(t, 'export.meta.period', { label: doc.meta.period.label }), null],
-    [label(t, 'export.meta.generatedAt', { at: doc.meta.generatedAt }), null],
+    [label(t, 'export.meta.generatedAt', { at: localStamp(doc.meta.generatedAt) }), null],
     ...(doc.meta.filterDescription.length > 0
       ? doc.meta.filterDescription.map((text) => [label(t, 'export.meta.filter', { text }), null])
       : [[label(t, 'export.meta.unfiltered'), null]]),

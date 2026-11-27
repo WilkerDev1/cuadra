@@ -94,18 +94,18 @@ export function WorkspaceSwitcher({ presentation, tone = 'plain' }: { presentati
               >
                 <Spine ws={ws} />
                 <span className="switcher__text">
-                  <span className="switcher__name">
-                    {ws.name}
-                    {ws.isDemo ? <Chip variant="info">{t('common.switcher.demo')}</Chip> : null}
-                  </span>
+                  <span className="switcher__name">{ws.name}</span>
                   <span className="switcher__meta">
                     {ws.lastMovementDate === null
                       ? t('common.switcher.accounts', { n: ws.accountCount })
                       : t('common.switcher.last', { when: formatRelativeDay(ws.lastMovementDate, today) })}
                   </span>
                 </span>
-                <span className="switcher__balance num" data-amount>
-                  {Money.format(ws.balanceMinor, { locale: getLocale(), currency: ws.currency })}
+                <span className="switcher__figure">
+                  <span className="switcher__balance num" data-amount>
+                    {Money.format(ws.balanceMinor, { locale: getLocale(), currency: ws.currency })}
+                  </span>
+                  {ws.isDemo ? <Chip variant="info">{t('common.switcher.demo')}</Chip> : null}
                 </span>
               </button>
             </li>

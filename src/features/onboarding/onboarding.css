@@ -1,0 +1,662 @@
+/* Bienvenida (DESIGN §10.1). Solo tokens de src/ui/tokens.css; clases con prefijo `onb-`.
+   Layout por container queries sobre `.onb` (el ancho real de la pantalla, no el del viewport). */
+
+.onb {
+  container-type: inline-size;
+  container-name: onb;
+  min-block-size: 100dvh;
+  background: var(--bg);
+}
+
+.onb-page {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100dvh;
+  inline-size: 100%;
+  max-inline-size: 36rem;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+.onb-page--center {
+  justify-content: center;
+}
+.onb-page--plantilla,
+.onb-page--preview {
+  max-inline-size: 36rem;
+}
+
+.onb-step {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-6);
+  min-inline-size: 0;
+}
+
+.onb-h1 {
+  margin-block-start: var(--s-2);
+  font-size: var(--t-h1);
+}
+.onb-h2 {
+  padding: 0;
+  margin-block-end: var(--s-3);
+  font-size: var(--t-h2);
+  font-weight: var(--w-title);
+  line-height: var(--lh-snug);
+}
+
+/* ---------- Barra de pasos ---------- */
+.onb-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-block-size: 3.5rem;
+  margin-inline: calc(-1 * var(--s-2));
+}
+.onb-bar__step {
+  margin-inline-end: var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+/* ---------- Acciones fijas abajo (sticky, no fixed) ---------- */
+.onb-actions {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: var(--z-sticky);
+  display: grid;
+  gap: var(--s-2);
+  margin-block-start: auto;
+  margin-inline: calc(-1 * var(--gutter));
+  padding: var(--s-3) var(--gutter) calc(var(--s-3) + env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-block-start: var(--bw) solid var(--rule);
+}
+
+/* ---------- Paso 1: bienvenida ---------- */
+.onb-welcome {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--s-8);
+  padding-block: 0 calc(var(--s-4) + env(safe-area-inset-bottom));
+}
+.onb-welcome__hero {
+  display: grid;
+  gap: var(--s-4);
+  margin-block: auto;
+}
+/* Papel de libro (DESIGN §1, como la pantalla de bloqueo): el aire sobre la marca es una hoja rayada a la altura de
+   fila, con las columnas del libro y la doble raya bajo la cabecera; termina en una raya fuerte sobre «Cuadra.». */
+.onb-paper {
+  position: relative;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr) 3.75rem 3.75rem 4.25rem;
+  min-block-size: calc(var(--fila) * 2);
+  /* A sangre hasta los bordes de la pantalla (100cqi = ancho de .onb); las columnas siguen alineadas al texto */
+  margin-inline: calc((100% - 100cqi) / 2);
+  margin-block-end: calc(-1 * var(--s-4));
+  padding-inline: calc((100cqi - 100%) / 2);
+  background: repeating-linear-gradient(to bottom, transparent 0 calc(var(--fila) - var(--bw)), var(--rule) calc(var(--fila) - var(--bw)) var(--fila));
+  border-block-end: var(--bw) solid var(--rule-strong);
+  overflow: hidden;
+}
+.onb-paper::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: calc(var(--fila) - var(--bw) * 3);
+  border-block-end: calc(var(--bw) * 3) double var(--rule-strong);
+}
+.onb-paper > span {
+  padding: calc((var(--fila) - var(--t-micro) * var(--lh-body)) / 2) var(--s-2) 0;
+  border-inline-start: var(--bw) solid var(--rule);
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+  font-weight: var(--w-medium);
+  font-stretch: var(--wd-table);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.onb-paper > span:first-child {
+  border-inline-start: calc(var(--bw) * 3) double var(--rule-strong);
+}
+.onb-paper > span:last-child {
+  border-inline-end: var(--bw) solid var(--rule);
+}
+.onb-paper__num {
+  text-align: end;
+}
+@container onb (width >= 36rem) {
+  .onb-paper {
+    grid-template-columns: 6rem minmax(0, 1fr) 6rem 6rem 7rem;
+  }
+}
+.onb-welcome > .onb-welcome__hero {
+  margin-block: 0 auto;
+}
+.onb-welcome__h1 {
+  margin: 0;
+  font: inherit;
+  letter-spacing: normal;
+}
+.onb-welcome__h1:focus {
+  outline: none;
+  box-shadow: none;
+}
+.onb-wordmark {
+  display: flex;
+  align-items: baseline;
+  margin: 0;
+  font-size: var(--t-display);
+  font-weight: var(--w-display);
+  font-stretch: 125%;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+}
+.onb-wordmark__dot {
+  display: inline-block;
+  flex: none;
+  inline-size: 0.22em;
+  block-size: 0.22em;
+  margin-inline-start: 0.07em;
+  background: var(--lime);
+  border: 1.5px solid var(--ink);
+  animation: onb-stamp var(--d-stamp) var(--ease-out) 240ms both;
+}
+@keyframes onb-stamp {
+  from {
+    scale: 2;
+    opacity: 0;
+  }
+}
+.onb-tagline {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-h2);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-snug);
+}
+.onb-welcome__foot {
+  display: grid;
+  gap: var(--s-4);
+}
+.onb-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  margin: 0;
+  padding-block: var(--s-3);
+  border-block: var(--bw) solid var(--rule);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+.onb-notice svg {
+  inline-size: var(--icon-row);
+  block-size: var(--icon-row);
+  margin-block-start: 0.1em;
+  color: var(--ink);
+}
+.onb-welcome__actions {
+  display: grid;
+  gap: var(--s-2);
+}
+.onb-welcome__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1) var(--s-4);
+}
+.onb-link {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--target);
+  padding-inline: var(--s-3);
+  color: var(--ink);
+  font-weight: var(--w-strong);
+  text-decoration: none;
+}
+@media (hover: hover) {
+  .onb-link:hover {
+    text-decoration: underline;
+  }
+}
+
+/* ---------- Paso 2: nombre, moneda y plantilla ---------- */
+.onb-split {
+  display: grid;
+  gap: var(--s-6);
+  min-inline-size: 0;
+}
+.onb-split__main {
+  display: grid;
+  align-content: start;
+  gap: var(--s-6);
+  min-inline-size: 0;
+}
+.onb-split__side {
+  display: none;
+}
+.onb-ident {
+  display: grid;
+  gap: var(--s-4);
+}
+
+.onb-lomos {
+  display: grid;
+  gap: var(--s-2);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.onb-pick-error {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-3);
+  color: var(--warn-ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+.onb-pick-error svg {
+  inline-size: var(--icon-row);
+  block-size: var(--icon-row);
+}
+.onb-lomo {
+  position: relative;
+  scroll-margin-block-end: calc(var(--target) + var(--s-12));
+  overflow: clip;
+  background: var(--surface);
+  border: var(--bw) solid var(--rule);
+  border-radius: var(--r-2);
+  transition: border-color var(--d-micro) var(--ease-out), box-shadow var(--d-micro) var(--ease-out);
+}
+.onb-lomo::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: var(--spine-w);
+  background: var(--spine, var(--tint-8));
+}
+.onb-lomo[data-selected] {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+.onb-lomo:has(input:focus-visible) {
+  outline: var(--bw-2) solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--focus-halo);
+}
+.onb-lomo__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  min-block-size: 4.5rem;
+  padding: var(--s-3) var(--s-4) var(--s-3) calc(var(--spine-w) + var(--s-4));
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.onb-lomo__text {
+  display: grid;
+  gap: var(--s-1);
+  min-inline-size: 0;
+}
+.onb-lomo__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-h3);
+  font-weight: var(--w-strong);
+  line-height: var(--lh-snug);
+}
+.onb-lomo__sum {
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+}
+.onb-lomo__chev {
+  inline-size: var(--icon-row);
+  block-size: var(--icon-row);
+  color: var(--ink-2);
+  transition: rotate var(--d-micro) var(--ease-out);
+}
+.onb-lomo[data-selected] .onb-lomo__chev {
+  rotate: 180deg;
+}
+@media (hover: hover) {
+  .onb-lomo:not([data-selected]) .onb-lomo__head:hover {
+    background: var(--surface-2);
+  }
+}
+
+/* El panel se despliega con interpolate-size (instantáneo donde no exista). */
+.onb-lomo__panel {
+  block-size: 0;
+  overflow: clip;
+  transition: block-size var(--d-sheet) var(--ease-out);
+}
+.onb-lomo[data-selected] .onb-lomo__panel {
+  block-size: auto;
+}
+.onb-lomo__panel-in {
+  padding: 0 var(--s-4) var(--s-4) calc(var(--spine-w) + var(--s-4));
+}
+@media (prefers-reduced-motion: reduce) {
+  .onb-lomo__panel {
+    transition: none;
+  }
+}
+
+.onb-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-2);
+  margin-inline: calc(-1 * var(--s-3));
+}
+.onb-issues {
+  display: grid;
+  gap: var(--s-1);
+  margin: var(--s-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-meta);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Vista previa de plantilla ---------- */
+.onb-prev {
+  display: grid;
+  gap: var(--s-5);
+}
+.onb-prev__h {
+  margin-block-end: var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+}
+.onb-prev__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.onb-prev__empty {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+.onb-prev__fields,
+.onb-prev__views {
+  display: grid;
+  gap: var(--s-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.onb-prev__views {
+  gap: 0;
+}
+.onb-prev__field {
+  display: grid;
+  gap: var(--s-2);
+}
+.onb-prev__fname {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  font-weight: var(--w-medium);
+}
+.onb-prev__fname svg {
+  inline-size: 1rem;
+  block-size: 1rem;
+  color: var(--ink-3);
+}
+.onb-prev__ftype {
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+  font-weight: var(--w-body);
+}
+.onb-prev__view {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-block-size: 2.5rem;
+  padding-block: var(--s-2);
+  border-block-end: var(--bw) solid var(--rule);
+}
+.onb-prev__view:last-child {
+  border-block-end: 0;
+}
+.onb-prev__all {
+  justify-self: start;
+  font-weight: var(--w-strong);
+}
+.onb-prevhead {
+  display: grid;
+  gap: var(--s-2);
+}
+.onb-side__name {
+  font-size: var(--t-h2);
+}
+.onb-side__desc {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+/* ---------- Paso 3: saldos iniciales ---------- */
+/* La hoja de la libreta: renglones vacíos de fondo (el renglón mide lo mismo que --fila). */
+.onb-page--saldos {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 calc(var(--fila) - 1px),
+    var(--rule) calc(var(--fila) - 1px) var(--fila)
+  );
+}
+.onb-accts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: clip;
+  background: var(--surface);
+  border: var(--bw) solid var(--rule);
+  border-radius: var(--r-2);
+  box-shadow: var(--sh-1);
+}
+.onb-accts > li + li {
+  border-block-start: var(--bw) solid var(--rule);
+}
+.onb-acct {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  inline-size: 100%;
+  min-block-size: 4rem;
+  padding: var(--s-2) var(--s-4);
+  text-align: start;
+  touch-action: manipulation;
+}
+.onb-acct__icon {
+  inline-size: var(--icon-row);
+  block-size: var(--icon-row);
+  color: var(--ink-2);
+}
+.onb-acct__name {
+  display: grid;
+  min-inline-size: 0;
+  font-weight: var(--w-medium);
+  overflow-wrap: anywhere;
+}
+.onb-acct__type {
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+  font-weight: var(--w-body);
+}
+.onb-acct__none {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+}
+.onb-acct__none svg {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+@media (hover: hover) {
+  .onb-acct:hover {
+    background: var(--surface-2);
+  }
+}
+.onb-sheet {
+  display: grid;
+  gap: var(--s-4);
+}
+.onb-actions--stack {
+  gap: var(--s-1);
+}
+
+/* ---------- Datos de ejemplo y fin ---------- */
+.onb-run {
+  display: grid;
+  gap: var(--s-5);
+  inline-size: 100%;
+  max-inline-size: 28rem;
+  margin-inline: auto;
+  padding-block: var(--s-12);
+}
+.onb-run__h1,
+.onb-run__done-h {
+  font-size: var(--t-h2);
+}
+.onb-run__percent {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 0;
+}
+.onb-run__figure {
+  position: relative;
+  isolation: isolate;
+  font-size: var(--t-hero);
+  font-weight: var(--w-figure);
+  line-height: var(--lh-tight);
+  font-variant-numeric: var(--num);
+}
+.onb-run__figure::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset-inline: -0.04em;
+  inset-block-end: 0;
+  block-size: var(--hl-h);
+  background: var(--lime);
+  border-radius: 2px 6px 3px 5px;
+  transform: skewX(-8deg);
+}
+.onb-run__unit {
+  color: var(--ink-3);
+  font-size: var(--t-h2);
+  font-weight: var(--w-medium);
+}
+.onb-run__phase {
+  margin: 0;
+  font-size: var(--t-h3);
+  font-weight: var(--w-medium);
+}
+.onb-run__profile {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+.onb-run__done {
+  display: grid;
+  gap: var(--s-3);
+  justify-items: start;
+}
+.onb-run--created {
+  justify-items: center;
+  text-align: center;
+}
+
+/* <progress> con estilo propio (modern-web-guidance: progress): sin agrupar los pseudo-elementos de WebKit y Firefox. */
+.onb-progress {
+  appearance: none;
+  border: 0 solid;
+  overflow: clip;
+  inline-size: 100%;
+  block-size: 0.75rem;
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 var(--bw) var(--rule);
+}
+.onb-progress::-webkit-progress-bar {
+  background: transparent;
+}
+.onb-progress::-webkit-progress-value {
+  background: var(--ink);
+  border-radius: var(--r-pill);
+  transition: inline-size var(--d-micro) linear;
+}
+.onb-progress::-moz-progress-bar {
+  background: var(--ink);
+  border-radius: var(--r-pill);
+}
+
+/* ---------- Ancho: dos columnas con la vista previa a la derecha (DESIGN §10.1, escritorio) ---------- */
+@container onb (min-width: 30rem) {
+  .onb-ident {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 17rem);
+    align-items: start;
+  }
+}
+@container onb (min-width: 48rem) {
+  .onb-page--inicio {
+    max-inline-size: 40rem;
+  }
+}
+@container onb (min-width: 60rem) {
+  .onb-page--plantilla {
+    max-inline-size: 72rem;
+  }
+  .onb-split {
+    grid-template-columns: minmax(0, 34rem) minmax(0, 1fr);
+    gap: var(--s-12);
+    align-items: start;
+  }
+  .onb-split__side {
+    display: block;
+    position: sticky;
+    inset-block-start: var(--s-6);
+  }
+  .onb-side {
+    display: grid;
+    gap: var(--s-4);
+    max-block-size: calc(100dvh - var(--s-12));
+    overflow: auto;
+    padding: var(--s-6);
+  }
+  .onb-lomo__panel,
+  .onb-lomo__chev {
+    display: none;
+  }
+  .onb-actions {
+    justify-items: start;
+    margin-inline: 0;
+    padding-inline: 0;
+    border-block-start: 0;
+    background: transparent;
+    max-inline-size: 34rem;
+  }
+}

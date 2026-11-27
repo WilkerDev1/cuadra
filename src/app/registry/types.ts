@@ -75,6 +75,8 @@ export interface FeatureRoute {
    * escritorio e inspector fijo en pantallas amplias; la página anterior queda detrás. Solo en `scope: 'workspace'`.
    */
   presentation?: 'page' | 'sheet';
+  /** Altura de la hoja inferior en móvil (50 / 85 / 100dvh). Por defecto `tall`. Solo con `presentation: 'sheet'`. */
+  sheetHeight?: 'half' | 'tall' | 'full';
   /** Clave i18n del título: encabezado de la hoja y título del documento. */
   titleKey?: string;
 }

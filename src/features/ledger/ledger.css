@@ -1,0 +1,677 @@
+/* Libro: movimientos, cuenta, detalle y lotes (DESIGN §10.5, §10.10). Solo tokens. */
+.lg {
+  container-type: inline-size;
+  container-name: lg;
+  inline-size: 100%;
+  max-inline-size: var(--content-max);
+  margin-inline: auto;
+  display: grid;
+  gap: var(--s-5);
+  align-content: start;
+  /* Alto del encabezado pegado del shell (0 desde 600 px). */
+  --lg-top: var(--topbar-h, 0px);
+}
+
+/* ── Encabezado ────────────────────────────────────────────────── */
+.lg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-4);
+}
+.lg-head--account {
+  display: grid;
+  justify-content: stretch;
+  gap: var(--s-2);
+}
+.lg-head__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+.lg-head__balance {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-1);
+}
+@container lg (width >= 720px) {
+  .lg-head--account {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+  .lg-head--account > :is(.lg-head__link, .lg-muted) {
+    grid-column: 1 / -1;
+  }
+  .lg-head__balance {
+    justify-items: end;
+  }
+}
+.lg-head__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+.lg-head__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-block-size: var(--target);
+  color: var(--accent-ink);
+  font-weight: var(--w-medium);
+  text-decoration: none;
+  justify-self: start;
+}
+.lg-head__link svg {
+  inline-size: var(--icon-row);
+  block-size: var(--icon-row);
+}
+@media (hover: hover) {
+  .lg-head__link:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+}
+.lg-muted {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+/* ── Barra de filtros ──────────────────────────────────────────── */
+.lg-bar {
+  display: grid;
+  gap: var(--s-3);
+  min-inline-size: 0;
+}
+.lg-bar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+.lg-search {
+  position: relative;
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+  max-inline-size: 24rem;
+}
+.lg-search__icon {
+  position: absolute;
+  z-index: 1;
+  inset-inline-start: var(--s-3);
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  inline-size: var(--icon-row);
+  block-size: var(--icon-row);
+  color: var(--ink-3);
+  pointer-events: none;
+}
+.lg-search .ui-input__control {
+  padding-inline-start: calc(var(--s-3) + var(--icon-row) + var(--s-2));
+}
+.lg-export {
+  margin-inline-start: auto;
+}
+.lg-views {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-inline-size: 0;
+}
+.lg-views__scroll {
+  display: flex;
+  gap: var(--s-2);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  padding-block: var(--s-1);
+  min-inline-size: 0;
+}
+.lg-views > .ui-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.lg-views__scroll > * {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+/* Vistas guardadas con scroll: se desvanecen por el lado donde queda más (modern-web-guidance
+   ui-atoms/scrollability-affordance-hints); sin animaciones ligadas al scroll queda el corte, que también avisa. */
+@property --lg-fade-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --lg-fade-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@supports (animation-timeline: scroll()) {
+  .lg-views__scroll {
+    --lg-fade: 2.5rem;
+    scroll-padding-inline: var(--lg-fade);
+    mask:
+      linear-gradient(var(--ink), var(--ink)) no-clip subtract,
+      linear-gradient(to right, var(--ink), transparent) 0 0 / var(--lg-fade-start) 100% no-repeat no-clip,
+      linear-gradient(to right, transparent, var(--ink)) 100% 0 / var(--lg-fade-end) 100% no-repeat no-clip;
+    animation: lg-fade-in linear both, lg-fade-out linear both;
+    animation-timeline: scroll(self inline);
+    animation-range: 0 var(--lg-fade), calc(100% - var(--lg-fade)) 100%;
+  }
+}
+@keyframes lg-fade-in { to { --lg-fade-start: var(--lg-fade); } }
+@keyframes lg-fade-out { from { --lg-fade-end: var(--lg-fade); } }
+
+/* ── Hoja de filtros ───────────────────────────────────────────── */
+.lg-fs {
+  display: grid;
+  gap: var(--s-5);
+}
+.lg-fs__group {
+  display: grid;
+  gap: var(--s-2);
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+.lg-fs__group > legend {
+  padding: 0;
+  margin-block-end: var(--s-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  color: var(--ink-2);
+}
+.lg-fs__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.lg-fs__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.lg-fs__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-3);
+}
+
+/* ── Totales del filtro ────────────────────────────────────────── */
+.lg-totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-6);
+  padding-block: var(--s-3);
+  border-block: var(--bw) solid var(--rule);
+}
+.lg-totals__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-8);
+  margin: 0;
+}
+.lg-totals__item {
+  display: grid;
+  gap: var(--s-1);
+}
+.lg-totals__item dt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+.lg-totals__item dd {
+  margin: 0;
+}
+.lg-totals__count {
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+}
+
+/* ── Lista virtual (móvil) ─────────────────────────────────────── */
+.lg-view {
+  display: grid;
+  gap: var(--s-3);
+  min-inline-size: 0;
+}
+.lg-vlist {
+  position: relative;
+  inline-size: 100%;
+  background: var(--surface);
+}
+.lg-abs {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+}
+.lg-item {
+  z-index: var(--z-base);
+}
+.lg-day {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  block-size: var(--fila);
+  padding-inline: var(--s-3);
+  background: var(--bg);
+  border-block-end: var(--bw) solid var(--rule-strong);
+  font-size: var(--t-small);
+  z-index: 2;
+}
+.lg-day--stuck {
+  position: sticky;
+  inset-block-start: var(--lg-top);
+  z-index: 1;
+}
+.lg-day__date {
+  font-weight: var(--w-strong);
+  color: var(--ink);
+}
+.lg-daytotal {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+.lg-daytotal__label {
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+}
+.lg-more {
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+  text-align: center;
+}
+
+/* ── Tabla densa (escritorio) ──────────────────────────────────── */
+.lg-table {
+  min-inline-size: 0;
+  container-type: inline-size;
+  container-name: lgt;
+}
+@container lgt (width < 980px) {
+  .lg-t .lg-t__extra {
+    display: none;
+  }
+}
+@container lgt (width < 820px) {
+  .lg-t .lg-t__date {
+    display: none;
+  }
+}
+.lg-t {
+  inline-size: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
+  font-size: var(--t-small);
+  font-stretch: var(--wd-table);
+  background: var(--surface);
+}
+.lg-t thead th {
+  position: sticky;
+  inset-block-start: var(--lg-top);
+  z-index: var(--z-sticky);
+  background: var(--bg);
+  border-block-end: var(--bw) solid var(--rule-strong);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--t-micro);
+  font-weight: var(--w-strong);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  text-align: start;
+  white-space: nowrap;
+}
+.lg-t thead th.lg-t__field {
+  white-space: normal;
+  min-inline-size: 6rem;
+}
+.lg-t td {
+  block-size: var(--fila);
+  padding: 0 var(--s-3);
+  border-block-end: var(--bw) solid var(--rule);
+  white-space: nowrap;
+  max-inline-size: 14rem;
+}
+.lg-t .is-end {
+  text-align: end;
+}
+.lg-t__date,
+.lg-t__seq {
+  inline-size: 1%;
+  color: var(--ink-2);
+}
+.lg-t__seq {
+  font-stretch: var(--wd-tight);
+}
+.lg-t__concept {
+  inline-size: 100%;
+  max-inline-size: 0;
+  overflow: hidden;
+}
+.lg-t td.lg-t__concept {
+  max-inline-size: 0;
+  min-inline-size: 12rem;
+}
+.lg-t__concept > * {
+  vertical-align: middle;
+}
+.lg-t__link {
+  display: inline-block;
+  max-inline-size: 100%;
+  color: var(--ink);
+  font-weight: var(--w-medium);
+  text-decoration: none;
+}
+.lg-t__link:focus-visible {
+  border-radius: var(--r-1);
+}
+.lg-t__sub {
+  display: block;
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+  line-height: 1.1;
+}
+.lg-t__money {
+  inline-size: 1%;
+}
+.lg-t__row {
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .lg-t__row:hover td {
+    background: var(--surface-2);
+  }
+}
+.lg-t__row:focus-within td {
+  background: var(--surface-2);
+}
+.lg-t__row:focus-within td:first-child {
+  box-shadow: inset var(--bw-2) 0 0 var(--ink);
+}
+.lg-t__row[data-voided] td {
+  color: var(--ink-3);
+}
+.lg-t__row[data-voided] .lg-t__link {
+  color: var(--ink-3);
+  text-decoration: line-through 2px;
+}
+.lg-t__day th {
+  block-size: var(--fila);
+  padding: 0 var(--s-3);
+  background: var(--bg);
+  border-block-end: var(--bw) solid var(--rule-strong);
+  text-align: start;
+  font-weight: var(--w-strong);
+}
+.lg-t__dayin {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.lg-t__pad td {
+  padding: 0;
+  border: 0;
+}
+.lg-void {
+  margin-inline-start: var(--s-2);
+  font-size: var(--t-micro);
+  font-weight: var(--w-strong);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--void);
+}
+
+/* ── Detalle ───────────────────────────────────────────────────── */
+.lg-detail {
+  container-type: inline-size;
+  container-name: lgd;
+  display: grid;
+  gap: var(--s-5);
+}
+.lg-detail__head {
+  position: relative;
+  display: grid;
+  gap: var(--s-1);
+}
+.lg-detail__kind {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+.lg-detail__amount {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+.lg-detail__stamp {
+  rotate: -4deg;
+}
+.lg-detail__date {
+  color: var(--ink);
+}
+.lg-detail__recorded,
+.lg-detail__voided {
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+}
+.lg-detail__voided {
+  color: var(--void);
+}
+.lg-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+/* Hoja e inspector (estrechos): las tres acciones en una fila de columnas iguales, icono sobre la etiqueta,
+   en vez de que «Anular» caiga sola a una segunda línea. */
+@container lgd (width < 32rem) {
+  .lg-detail__actions {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+  .lg-detail__actions .ui-btn:not(:only-child) {
+    flex-direction: column;
+    gap: var(--s-1);
+    min-block-size: var(--s-16);
+    padding-inline: var(--s-2);
+    font-size: var(--t-small);
+  }
+}
+.lg-dl {
+  display: grid;
+  margin: 0;
+}
+.lg-dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: var(--s-3);
+  align-items: baseline;
+  padding-block: var(--s-2);
+  border-block-end: var(--bw) solid var(--rule);
+}
+.lg-dl dt {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+.lg-dl dd {
+  margin: 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.lg-dl dd a {
+  color: var(--accent-ink);
+}
+.lg-dl__notes {
+  white-space: pre-wrap;
+}
+.lg-history {
+  display: grid;
+  gap: var(--s-3);
+}
+.lg-history h2 {
+  font-size: var(--t-h3);
+}
+.lg-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-4);
+  border-inline-start: var(--bw) solid var(--rule-strong);
+}
+.lg-timeline__item {
+  position: relative;
+  display: grid;
+  gap: var(--s-1);
+  padding-inline-start: var(--s-4);
+}
+.lg-timeline__item::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: calc(-1 * var(--s-1) - 0.5px);
+  inset-block-start: 0.45em;
+  inline-size: var(--s-2);
+  block-size: var(--s-2);
+  background: var(--ink);
+}
+.lg-timeline__when {
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+.lg-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-1);
+  font-size: var(--t-small);
+}
+.lg-changes li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+}
+.lg-changes__label {
+  color: var(--ink-2);
+  min-inline-size: 6rem;
+}
+.lg-changes__values {
+  font-variant-numeric: var(--num);
+}
+.lg-changes del {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+.lg-changes ins {
+  color: var(--ink);
+  text-decoration: none;
+}
+.lg-changes__empty {
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+/* ── Lote ──────────────────────────────────────────────────────── */
+.lg-batch {
+  display: grid;
+  gap: var(--s-3);
+  padding-block: var(--s-3);
+  border-block: var(--bw) solid var(--rule);
+}
+.lg-batch__diff {
+  display: flex;
+  align-items: center;
+}
+.lg-batch__ok {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-weight: var(--w-strong);
+}
+.lg-batch__warn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  color: var(--warn-ink);
+  font-weight: var(--w-strong);
+}
+.lg-batch__warn .ui-amount {
+  color: var(--warn-ink);
+}
+.lg-batch__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+/* ── Filas del libro: el botón ⋯ nunca encoge, así los montos de todas las filas quedan en la misma columna ── */
+.lg-item .ui-row__more {
+  flex-shrink: 0;
+}
+
+/* ── Compacta: búsqueda a lo ancho, chips y exportar en una fila, totales en una franja, lista a sangre ── */
+@container lg (width < 600px) {
+  .lg {
+    gap: var(--s-4);
+  }
+  .lg-bar {
+    gap: var(--s-2);
+  }
+  .lg-bar__row {
+    gap: var(--s-2);
+  }
+  .lg-search {
+    order: -1;
+    flex-basis: 100%;
+    max-inline-size: none;
+  }
+  .lg-export .ui-btn__label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .lg-export {
+    inline-size: var(--target);
+    padding-inline: 0;
+    justify-content: center;
+  }
+  /* Entradas · Salidas · Neto en una sola franja de tres columnas; con montos muy largos, salta de línea. */
+  .lg-totals {
+    gap: var(--s-1);
+    padding-block: var(--s-2);
+  }
+  .lg-totals__list {
+    inline-size: 100%;
+    justify-content: space-between;
+    gap: var(--s-2) var(--s-3);
+  }
+  .lg-totals__item {
+    gap: 0;
+  }
+  .lg-totals__item dt {
+    font-size: var(--t-meta);
+  }
+  .lg-totals__item .ui-amount--m {
+    font-size: var(--t-small);
+    font-stretch: var(--wd-table);
+  }
+  /* Lista a sangre: las filas llegan al borde de la pantalla y el concepto gana ancho */
+  .lg-view > .lg-vlist,
+  .lg-view > .ui-empty {
+    inline-size: auto;
+    margin-inline: calc(var(--gutter) * -1);
+  }
+}
+
+/* Cabecera de día alineada con las filas: fecha con el concepto y neto con la columna de montos */
+.lg-day {
+  padding-inline: var(--gutter) calc(var(--s-1) + var(--target) + var(--s-1));
+}

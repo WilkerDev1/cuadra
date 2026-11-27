@@ -75,7 +75,13 @@ function randomBytes(n: number): Uint8Array<ArrayBuffer> {
 
 // ── base64 ───────────────────────────────────────────────────────────────────────────
 
-const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+// Sin grupos repetidos: `(?:…{4})*` desborda la pila del motor de regex con textos de varios MB (respaldos
+// cifrados grandes). Alfabeto + relleno solo al final + longitud múltiplo de 4 es lo mismo y es lineal.
+const BASE64_CHARS_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+
+function isCanonicalBase64(text: string): boolean {
+  return text.length % 4 === 0 && BASE64_CHARS_RE.test(text);
+}
 
 /** Bytes → base64 estándar (con relleno). btoa trabaja con cadenas binarias: se arma por trozos. */
 export function bytesToBase64(bytes: Uint8Array): string {
@@ -89,7 +95,7 @@ export function bytesToBase64(bytes: Uint8Array): string {
 
 /** base64 estándar → bytes. Lanza RangeError si el texto no es base64 canónico. */
 export function base64ToBytes(text: string): Uint8Array<ArrayBuffer> {
-  if (!BASE64_RE.test(text)) throw new RangeError('base64 inválido');
+  if (!isCanonicalBase64(text)) throw new RangeError('base64 inválido');
   const binary = atob(text);
   const out = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
@@ -97,7 +103,7 @@ export function base64ToBytes(text: string): Uint8Array<ArrayBuffer> {
 }
 
 function isBase64(x: unknown): x is string {
-  return typeof x === 'string' && BASE64_RE.test(x);
+  return typeof x === 'string' && isCanonicalBase64(x);
 }
 
 // ── Utilidades ───────────────────────────────────────────────────────────────────────

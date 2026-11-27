@@ -14,6 +14,8 @@ export interface SettingsMap {
   'backup.reminderDays': number; // 30
   'workspace.lastOpened': Id | null;
   'demo.offered': boolean;
+  /** Montos con el teclado del sistema en vez del teclado propio (accesibilidad, lectores de pantalla). */
+  'capture.systemKeyboard': boolean;
 }
 export interface WorkspaceSettingsMap {
   'capture.lastKind': 'income' | 'expense';
@@ -51,6 +53,7 @@ export const SETTINGS_SPEC: { [K in keyof SettingsMap]: Spec<SettingsMap[K]> } =
   },
   'workspace.lastOpened': { fallback: null, valid: isNullableString },
   'demo.offered': { fallback: false, valid: (v): v is boolean => typeof v === 'boolean' },
+  'capture.systemKeyboard': { fallback: false, valid: (v): v is boolean => typeof v === 'boolean' },
 };
 
 export const WORKSPACE_SETTINGS_SPEC: { [K in keyof WorkspaceSettingsMap]: Spec<WorkspaceSettingsMap[K]> } = {

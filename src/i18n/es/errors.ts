@@ -1,5 +1,5 @@
 // Mensajes de errores de dominio, de parseo de montos y de avisos suaves (dueño: núcleo).
-// Claves: 'errors.<ErrorCode>', 'errors.money.<MoneyParseError>', 'errors.warning.<Warning.code>'.
+// Claves: 'errors.<ErrorCode>' (y 'errors.<ErrorCode>.<details.reason>' si hace falta precisar), 'errors.money.<MoneyParseError>', 'errors.warning.<Warning.code>'.
 // La UI traduce un DomainError con t('errors.' + error.code).
 export default {
   'errors.not_found': 'No encontramos lo que buscas. Puede que ya no exista.',
@@ -7,6 +7,8 @@ export default {
   'errors.account_archived': 'Esta cuenta está archivada. Desarchívala para anotar en ella.',
   'errors.workspace_mismatch': 'La cuenta pertenece a otro espacio.',
   'errors.invalid_amount': 'El monto no es válido.',
+  'errors.invalid_amount.workspace_total_too_large': 'Con este monto, el total del espacio pasaría del máximo que Cuadra puede guardar.',
+  'errors.too_large': 'El monto es demasiado grande: la suma pasaría del máximo que Cuadra puede guardar.',
   'errors.invalid_date': 'La fecha no es válida.',
   'errors.description_required': 'Escribe una descripción.',
   'errors.opening_exists': 'Esta cuenta ya tiene saldo inicial. Edítalo en lugar de crear otro.',

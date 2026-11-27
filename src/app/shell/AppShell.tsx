@@ -1,6 +1,8 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useLocation, useMatches, useNavigate, useOutlet, useParams } from 'react-router';
+import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link, useLocation, useMatches, useNavigate, useOutlet, useParams } from 'react-router';
 import { useT } from '../../i18n';
+import { useWorkspace } from '../data/hooks';
+import { useWorkspaceIndexRoute } from '../registry/hooks';
 import { InspectorContext, InspectorPanel } from '../registry/inspector';
 import { SheetContext, type SheetApi } from '../registry/sheet';
 import type { RouteHandle } from '../router';
@@ -34,9 +36,12 @@ export function AppShell() {
   const setLast = useUiStore((s) => s.setLastWorkspaceId);
   const breakpoint = useBreakpoint();
   const main = useRef<HTMLElement>(null);
+  const workspace = useWorkspace();
+  // Un enlace viejo o un espacio eliminado: ni la pantalla ni la hoja tienen nada que leer.
+  const missing = workspace.error?.code === 'not_found';
 
   const handle = matches.at(-1)?.handle as RouteHandle | undefined;
-  const isSheet = handle?.presentation === 'sheet';
+  const isSheet = handle?.presentation === 'sheet' && !missing;
 
   // Panel fijo: el aside existe siempre en ancho amplio; la columna solo se abre mientras alguien lo ocupa.
   const [target, setTarget] = useState<HTMLElement | null>(null);
@@ -51,11 +56,13 @@ export function AppShell() {
   // La última página (no hoja) se conserva para pintarla detrás de la hoja o del inspector.
   const background = useRef<Background | null>(null);
   if (!isSheet) background.current = { wsId, element: outlet, to: location.pathname + location.search };
-  const behind = isSheet && background.current?.wsId === wsId ? background.current.element : null;
+  const hasBackground = background.current?.wsId === wsId;
+  const behind = isSheet && hasBackground ? background.current?.element : null;
 
+  const loadedId = workspace.data?.id;
   useEffect(() => {
-    if (wsId !== '') setLast(wsId);
-  }, [wsId, setLast]);
+    if (loadedId !== undefined) setLast(loadedId);
+  }, [loadedId, setLast]);
 
   useRouteEffects(main, { enabled: !isSheet, titleKey: handle?.titleKey });
 
@@ -69,7 +76,7 @@ export function AppShell() {
         <Sidebar />
         <main id="main" ref={main} className="shell-main">
           <ShellBanners />
-          {isSheet ? behind : outlet}
+          {missing ? <WorkspaceMissing /> : isSheet ? (hasBackground ? behind : <IndexBehind />) : outlet}
         </main>
         <aside
           ref={setTarget}
@@ -79,7 +86,13 @@ export function AppShell() {
         />
         <BottomTabs />
         {isSheet ? (
-          <RouteSheet key={location.pathname} titleKey={handle?.titleKey} to={background.current?.to ?? null} wsId={wsId}>
+          <RouteSheet
+            key={location.pathname}
+            titleKey={handle?.titleKey}
+            height={handle?.sheetHeight ?? 'tall'}
+            to={background.current?.to ?? null}
+            wsId={wsId}
+          >
             {outlet}
           </RouteSheet>
         ) : null}
@@ -89,11 +102,50 @@ export function AppShell() {
   );
 }
 
+/** El espacio de la URL no existe (o se eliminó): se dice y se ofrece volver a la lista. */
+function WorkspaceMissing() {
+  const t = useT('common');
+  return (
+    <div className="shell-missing">
+      <h1 className="shell-title">{t('wsMissing.title')}</h1>
+      <p className="shell-lede">{t('wsMissing.body')}</p>
+      <Link className="shell-button" to="/">
+        {t('wsMissing.action')}
+      </Link>
+    </div>
+  );
+}
+
+/** Enlace directo a una hoja (sin página anterior): detrás va el inicio del espacio, no una página vacía. */
+function IndexBehind() {
+  const route = useWorkspaceIndexRoute();
+  const Index = useMemo(() => (route === null ? null : lazy(async () => ({ default: (await route.lazy()).Component }))), [route]);
+  if (Index === null) return null;
+  return (
+    <Suspense fallback={null}>
+      <Index />
+    </Suspense>
+  );
+}
+
 /** Hoja o inspector de una ruta `presentation: 'sheet'`: el shell pone el marco, el título y el cierre. */
-function RouteSheet({ titleKey, to, wsId, children }: { titleKey: string | undefined; to: string | null; wsId: string; children: ReactNode }) {
+function RouteSheet({
+  titleKey,
+  height,
+  to,
+  wsId,
+  children,
+}: {
+  titleKey: string | undefined;
+  height: 'half' | 'tall' | 'full';
+  to: string | null;
+  wsId: string;
+  children: ReactNode;
+}) {
   const t = useT();
   const navigate = useNavigate();
   const [dirty, setDirty] = useState(false);
+  const [title, setTitle] = useState<string | null>(null);
   const { mode } = useContext(InspectorContext);
 
   const close = useCallback(() => {
@@ -101,7 +153,7 @@ function RouteSheet({ titleKey, to, wsId, children }: { titleKey: string | undef
     if (to !== null && idx > 0) void navigate(-1);
     else void navigate(to ?? `/e/${wsId}`, { replace: true });
   }, [navigate, to, wsId]);
-  const api = useMemo<SheetApi>(() => ({ mode, close, setDirty }), [mode, close]);
+  const api = useMemo<SheetApi>(() => ({ mode, close, setDirty, setTitle }), [mode, close]);
 
   // Al cerrar una hoja el foco vuelve a lo que la abrió (el unmount no lo hace solo).
   const opener = useRef<Element | null>(document.activeElement);
@@ -115,7 +167,7 @@ function RouteSheet({ titleKey, to, wsId, children }: { titleKey: string | undef
 
   return (
     <SheetContext.Provider value={api}>
-      <InspectorPanel title={t(titleKey ?? 'common.sheet.default')} onClose={close} dirty={dirty}>
+      <InspectorPanel title={title ?? t(titleKey ?? 'common.sheet.default')} onClose={close} dirty={dirty} height={height}>
         {children}
       </InspectorPanel>
     </SheetContext.Provider>

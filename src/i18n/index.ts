@@ -78,6 +78,11 @@ export function interpolate(template: string, params?: TranslateParams): string 
   return out;
 }
 
+/** ¿Existe la clave en el diccionario activo? (para textos opcionales, sin el aviso de clave inexistente). */
+export function hasKey(key: string): boolean {
+  return current[key] !== undefined;
+}
+
 export function t(key: string, params?: TranslateParams): string {
   const text = current[key];
   if (text === undefined) {

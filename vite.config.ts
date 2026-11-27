@@ -63,7 +63,11 @@ export default defineConfig({
     }),
   ],
   worker: { format: 'es' },
-  optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] },
+  optimizeDeps: {
+    exclude: ['@sqlite.org/sqlite-wasm'],
+    // Se cargan con import() perezoso: sin esto, la primera lectura de un .xlsx en desarrollo da «504 Outdated Optimize Dep».
+    include: ['read-excel-file/browser', 'read-excel-file/universal', 'write-excel-file/browser', 'write-excel-file/universal', 'papaparse'],
+  },
   build: { target: 'es2023', sourcemap: true },
   server: { port: 5173 },
 });

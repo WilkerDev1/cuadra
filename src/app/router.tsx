@@ -9,27 +9,27 @@ import { RootShell } from './shell/RootShell';
 import { WorkspaceStatus } from './shell/WorkspaceStatus';
 import { useUiStore } from './state/uiStore';
 
-/** PROVISIONAL: hasta que la feature `workspaces` exista y reclame la ruta `/`, el shell abre este espacio. */
-export const PROVISIONAL_WORKSPACE_ID = 'demo';
-
 export interface RouteHandle {
   presentation: 'page' | 'sheet';
   titleKey?: string;
+  sheetHeight?: 'half' | 'tall' | 'full';
 }
 
 function toRoute(route: FeatureRoute): RouteObject {
   const handle: RouteHandle = {
     presentation: route.presentation ?? 'page',
     ...(route.titleKey === undefined ? {} : { titleKey: route.titleKey }),
+    ...(route.sheetHeight === undefined ? {} : { sheetHeight: route.sheetHeight }),
   };
   const lazy = async () => ({ Component: (await route.lazy()).Component });
   if (route.path === '') return { index: true, lazy, handle };
   return { path: route.path, lazy, handle };
 }
 
+/** Solo si ninguna feature reclama `/` (la dueña es `workspaces`): abre el último espacio o la bienvenida. */
 function RootRedirect() {
   const last = useUiStore((s) => s.lastWorkspaceId);
-  return <Navigate to={`/e/${last ?? PROVISIONAL_WORKSPACE_ID}`} replace />;
+  return <Navigate to={last === null ? '/bienvenida' : `/e/${last}`} replace />;
 }
 
 /** Destino de los atajos de la PWA (`#/atajo/entrada`): abre «Nuevo» en el último espacio usado. */

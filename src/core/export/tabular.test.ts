@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Account, AuditEntry, Field, SummaryResult, TransactionRow } from '../types';
-import { auditToSheet, label, sheetName, sheetToRows, summaryToSheet, transactionsToSheet } from './tabular';
+import { auditToSheet, label, localStamp, sheetName, sheetToRows, summaryToSheet, transactionsToSheet } from './tabular';
 
 const DOP = { code: 'DOP', minorDigits: 2 as const, symbol: 'RD$' };
 const CLP = { code: 'CLP', minorDigits: 0 as const };
@@ -66,6 +66,11 @@ const OLD = field({ id: 'old', label: 'Viejo', type: 'text', active: false });
 const DUE = field({ id: 'due', label: 'Vence', type: 'date', active: false });
 
 describe('export/tabular', () => {
+  it('localStamp: hora local legible y texto raro tal cual', () => {
+    const d = new Date(2026, 10, 27, 3, 5);
+    expect(localStamp(d.toISOString())).toBe('2026-11-27 03:05');
+    expect(localStamp('no-es-fecha')).toBe('no-es-fecha');
+  });
   it('transactionsToSheet: columnas por defecto, tipos y celdas', () => {
     const rows = [
       row({ id: 'a', seq: 7, amountMinor: 250050, description: 'Venta', runningMinor: 350050, values: { cat: { type: 'list', optionId: 'o1' }, qty: { type: 'number', value: 1.5 }, ok: { type: 'bool', value: true } } }),

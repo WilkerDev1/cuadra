@@ -53,6 +53,7 @@ export const queryDefs = {
     def(['queries.balanceSeries', ws, input], ['accounts', 'transactions'], (c) => c.queries.balanceSeries(ws, input)),
   fields: (ws: Id, opts?: { includeInactive?: boolean }) =>
     def(['fields.list', ws, opts?.includeInactive ?? false], ['fields', 'field_options'], (c) => c.fields.list(ws, opts)),
+  fieldDimensions: (ws: Id) => def(['fields.dimensions', ws], ['fields', 'field_options'], (c) => c.fields.dimensions(ws)),
   formSchema: (ws: Id, kind: 'income' | 'expense' | 'transfer') =>
     def(['fields.formSchema', ws, kind], ['fields', 'field_options'], (c) => c.fields.formSchema(ws, kind)),
   transactions: (ws: Id, filter: TxFilter, page: TxPage = {}) =>

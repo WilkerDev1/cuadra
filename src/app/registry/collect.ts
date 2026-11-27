@@ -1,10 +1,8 @@
 import type { FeatureModule } from './types';
 import { findRegistryProblems } from './select';
 
-// `features/*` son las áreas reales. `app/dev/*` son bancos de pruebas del shell (solo con id `_…`, solo en dev).
-const mods = import.meta.glob<{ feature: FeatureModule }>(['../../features/*/index.ts', '../dev/*/index.ts'], {
-  eager: true,
-});
+// `features/*` son las áreas reales; las de id `_…` (galería) solo existen en desarrollo.
+const mods = import.meta.glob<{ feature: FeatureModule }>('../../features/*/index.ts', { eager: true });
 
 /** Las features con id que empieza por `_` (galería, pruebas) solo existen en desarrollo. */
 export function selectFeatures(modules: Record<string, { feature: FeatureModule }>, dev: boolean): FeatureModule[] {

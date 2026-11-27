@@ -1,0 +1,302 @@
+/* Selector de espacios (DESIGN §10.2). Solo tokens de src/ui/tokens.css; clases con prefijo `wsp-`. */
+
+.wsp {
+  container-type: inline-size;
+  container-name: wsp;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-block-size: 100dvh;
+  inline-size: 100%;
+  max-inline-size: 46rem;
+  margin-inline: auto;
+  padding: var(--s-6) var(--gutter) var(--s-6);
+}
+
+.wsp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+}
+.wsp-head__title {
+  min-inline-size: 0;
+}
+.wsp-new {
+  white-space: nowrap;
+}
+
+.wsp-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+.wsp-search {
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+}
+
+/* Marca pequeña sobre el título: el sello como punto final (DESIGN §1, §10.1) */
+.wsp-brand {
+  display: flex;
+  align-items: baseline;
+  margin: 0 0 calc(-1 * var(--s-2));
+  font-size: var(--t-h3);
+  font-weight: var(--w-display);
+  font-stretch: 125%;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ink);
+}
+.wsp-brand__seal {
+  inline-size: 0.32em;
+  block-size: 0.32em;
+  margin-inline-start: 0.08em;
+  background: var(--lime);
+  border: calc(var(--bw) * 1.5) solid var(--ink);
+}
+
+/* ---------- Lista de lomos ---------- */
+.wsp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: var(--bw) solid var(--rule);
+  border-radius: var(--r-2);
+  box-shadow: var(--sh-1);
+  overflow: clip;
+}
+.wsp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-block-end: var(--bw) solid var(--rule);
+}
+.wsp-row:last-child {
+  border-block-end: 0;
+}
+.wsp-row > .ui-menu {
+  padding-inline-end: var(--s-1);
+}
+
+.wsp-lomo {
+  display: grid;
+  /* Estrecho: el saldo va debajo del nombre; ancho: a la derecha (ver el container query de abajo). */
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: center;
+  align-items: center;
+  align-self: stretch;
+  column-gap: var(--s-3);
+  min-block-size: 4.5rem;
+  padding-inline-end: var(--s-2);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background-color var(--d-micro) var(--ease-out);
+}
+a.wsp-lomo:active {
+  background: var(--surface-2);
+}
+@media (hover: hover) {
+  a.wsp-lomo:hover {
+    background: var(--surface-2);
+  }
+}
+
+.wsp-spine {
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  inline-size: 3.75rem;
+  padding-inline-start: var(--s-3);
+  border-inline-start: var(--spine-w) solid var(--spine, var(--tint-8));
+  color: var(--spine, var(--ink-2));
+  font-size: 2.5rem;
+  font-weight: var(--w-display);
+  font-stretch: var(--wd-min);
+  line-height: 1;
+}
+
+.wsp-text {
+  display: grid;
+  gap: 0.125rem;
+  min-inline-size: 0;
+  padding-block: var(--s-3) var(--s-1);
+}
+.wsp-name {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  min-inline-size: 0;
+  gap: var(--s-2);
+  font-size: var(--t-h3);
+  font-weight: var(--w-strong);
+  line-height: var(--lh-snug);
+}
+.wsp-name .ui-chip {
+  flex: none;
+  min-block-size: 1.5rem;
+  padding-inline: var(--s-2);
+  font-size: var(--t-meta);
+}
+.wsp-name__text {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wsp-meta {
+  font-size: var(--t-meta);
+  color: var(--ink-3);
+  line-height: var(--lh-snug);
+}
+.wsp-figure {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-inline-size: 0;
+  padding-block-end: var(--s-3);
+}
+.wsp-balance {
+  font-weight: var(--w-strong);
+}
+.wsp-demo {
+  flex: none;
+  min-block-size: 1.5rem;
+  padding-inline: var(--s-2);
+  font-size: var(--t-meta);
+}
+.wsp-row--archived .wsp-lomo .ui-btn {
+  grid-column: 2;
+  justify-self: start;
+  margin-block-end: var(--s-3);
+}
+
+/* «Nuevo espacio»: en el encabezado cuando hay ancho; en una barra fija abajo (al alcance del pulgar) cuando no. */
+.wsp-new--head {
+  display: none;
+}
+.wsp-newbar {
+  margin-block-start: auto;
+  position: sticky;
+  inset-block-end: 0;
+  z-index: var(--z-sticky);
+  margin-inline: calc(-1 * var(--gutter));
+  padding: var(--s-3) var(--gutter) calc(var(--s-3) + env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-block-start: var(--bw) solid var(--rule);
+}
+
+/* Archivados: grises, con «Recuperar» a la vista */
+.wsp-archived__sum {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--target);
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+  cursor: pointer;
+}
+.wsp-archived[open] > .wsp-archived__sum {
+  margin-block-end: var(--s-2);
+}
+.wsp-list--archived .wsp-spine {
+  opacity: 0.55;
+}
+.wsp-list--archived .wsp-name {
+  color: var(--ink-2);
+}
+
+/* ---------- Diálogos ---------- */
+.wsp-edit,
+.wsp-purge {
+  display: grid;
+  gap: var(--s-4);
+}
+.wsp-tints__legend {
+  margin-block-end: var(--s-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+.wsp-tints__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.wsp-tint {
+  position: relative;
+  display: inline-grid;
+  cursor: pointer;
+}
+.wsp-tint__chip {
+  display: grid;
+  place-items: center;
+  inline-size: var(--target);
+  block-size: var(--target);
+  border-radius: var(--r-1);
+  background: var(--swatch);
+  color: var(--bg);
+  transition: transform var(--d-press) var(--ease-out);
+}
+.wsp-tint__chip svg {
+  inline-size: var(--icon-row);
+  block-size: var(--icon-row);
+  stroke-width: 3;
+  opacity: 0;
+}
+.wsp-tint:active .wsp-tint__chip {
+  transform: scale(var(--press-scale));
+}
+.wsp-tint:has(input:checked) .wsp-tint__chip {
+  outline: var(--bw-2) solid var(--ink);
+  outline-offset: 2px;
+}
+.wsp-tint:has(input:checked) .wsp-tint__chip svg {
+  opacity: 1;
+}
+.wsp-tint:has(input:focus-visible) .wsp-tint__chip {
+  outline: var(--bw-2) solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--focus-halo);
+}
+
+@container wsp (min-width: 36rem) {
+  .wsp {
+    padding-block-start: var(--s-10);
+  }
+  .wsp-new--head {
+    display: inline-flex;
+  }
+  .wsp-newbar {
+    display: none;
+  }
+  .wsp-lomo {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto;
+    min-block-size: 5rem;
+    column-gap: var(--s-4);
+  }
+  .wsp-spine {
+    grid-row: auto;
+  }
+  .wsp-text {
+    padding-block: var(--s-3);
+  }
+  .wsp-figure {
+    grid-column: 3;
+    flex-direction: row-reverse;
+    padding-block-end: 0;
+  }
+  .wsp-row--archived .wsp-lomo .ui-btn {
+    grid-column: 3;
+    margin-block-end: 0;
+  }
+  .wsp-spine {
+    inline-size: 4.5rem;
+    padding-inline-start: var(--s-4);
+    font-size: 3rem;
+  }
+}

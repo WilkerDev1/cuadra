@@ -47,6 +47,16 @@ describe('crypto: base64', () => {
   it('rechaza texto que no es base64', () => {
     expect(() => base64ToBytes('no es base64!')).toThrow(RangeError);
     expect(() => base64ToBytes('abc')).toThrow(RangeError);
+    expect(() => base64ToBytes('ab=c')).toThrow(RangeError);
+    expect(() => base64ToBytes('a===')).toThrow(RangeError);
+    expect(() => base64ToBytes('ab-_')).toThrow(RangeError);
+  });
+
+  it('valida textos de varios MB sin desbordar la pila (respaldo cifrado grande)', () => {
+    const big = new Uint8Array(12_000_000).map((_, i) => (i * 7) & 255);
+    const text = bytesToBase64(big);
+    expect(base64ToBytes(text).length).toBe(big.length);
+    expect(isEncryptedEnvelope({ format: 'cuadra-encrypted', v: 1, kdf: 'PBKDF2-SHA256', iterations: 600_000, salt: 'AAAA', iv: 'AAAA', data: text })).toBe(true);
   });
 
   it('comparación en tiempo constante', () => {

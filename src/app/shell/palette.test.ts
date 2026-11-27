@@ -62,6 +62,19 @@ describe('buildPaletteItems', () => {
     expect(byId('go:root:respaldo')?.run).toEqual({ type: 'navigate', to: '/respaldo' });
     expect(byId('go:workspace:inicio')?.hint).toBe('G I');
   });
+  it('añade las secciones de ajustes que no tienen ya una entrada con el mismo destino', () => {
+    const icon = (() => null) as never;
+    const items = buildPaletteItems(
+      sources({
+        sections: [
+          { id: 'views', scope: 'workspace', labelKey: 'Vistas', icon, to: 'ajustes/vistas', order: 1 },
+          { id: 'dup', scope: 'root', labelKey: 'Respaldo', icon, to: 'respaldo', order: 2 },
+        ],
+      }),
+    );
+    expect(items.find((i) => i.id === 'go:workspace:settings:views')?.run).toEqual({ type: 'navigate', to: '/e/w1/ajustes/vistas' });
+    expect(items.filter((i) => i.run.type === 'navigate' && i.run.to === '/respaldo')).toHaveLength(1);
+  });
   it('lista los espacios activos con su saldo y omite los archivados', () => {
     expect(byId('ws:w1')).toMatchObject({ label: 'Colmado La Esquina', hint: 'RD$12500.50', run: { type: 'navigate', to: '/e/w1' } });
     expect(byId('ws:w3')).toBeUndefined();

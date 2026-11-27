@@ -1753,42 +1753,65 @@ Las tarjetas del inicio (saldo, flujo mensual, cuentas, recordatorio de respaldo
 - `InspectorPanel` (`app/registry/inspector`): portal al inspector fijo desde 1280 px, hoja lateral o inferior en anchos menores. `useSheet()` (`app/registry/sheet`) da `close` y `setDirty` a las rutas `presentation: 'sheet'`.
 - `findRegistryProblems` avisa en desarrollo de ids o atajos repetidos.
 
+**Añadidos de la Oleada 3 al registro y al shell:**
+
+- `FeatureRoute.sheetHeight` (`half` | `tall` | `full`, por defecto `tall`) para la hoja inferior móvil; `useSheet().setTitle(texto | null)` cambia el título de la hoja (p. ej. «Editar movimiento»).
+- Un enlace directo a una hoja pinta detrás el inicio del espacio (`useWorkspaceIndexRoute`), y `useBreakpoint` mide en el primer render, así la hoja no salta de modal a inspector y se cierra sola.
+- Los toasts se mueven dentro del `<dialog>` modal abierto (si no, su [Deshacer] quedaba inerte bajo una hoja).
+- `LockGate` envuelve la pantalla de bloqueo en `<main>`.
+- `app/data/hooks`: `usePushToast()` (avisos sin tocar `app/state`) y `useFieldDimensions()`.
+- `errorMessage` busca primero `errors.<code>.<reason>` (p. ej. `errors.invalid_amount.workspace_total_too_large`).
+- El arranque aplica el `locale` guardado con `setLocale` antes del primer pintado.
+- Retirado el banco de pruebas `app/dev/shellPreview` y `PROVISIONAL_WORKSPACE_ID`: `/` es de `workspaces`; sin ninguna feature que lo reclame, `RootRedirect` va al último espacio o a `/bienvenida`.
+
 Atajos del shell: `Ctrl+K` paleta, `n` anotar, `e`/`s`/`t` entrada/salida/transferencia, `g` + letra para ir, `/` buscar, `?` ayuda. No actúan al escribir ni con un diálogo modal abierto. Las features no renderizan `<main>` (lo pone el shell) ni usan `position: fixed` dentro de sus páginas.
 
 ### 5.3 Enrutado
 
-`createHashRouter` (react-router 8.5.3, modo librería): funciona en GitHub Pages en subruta y en Tauri sin configurar servidor. `src/app/router.tsx` construye el árbol a partir de `features`:
+`createHashRouter` (react-router 8.5.3, modo librería): funciona en GitHub Pages en subruta y en Tauri sin configurar servidor. `src/app/router.tsx` construye el árbol a partir de `features`. Rutas reales al cierre de la Oleada 3:
 
 ```
-/                                    → workspaces    P-01 Elegir espacio (o redirige al último abierto)
-/bienvenida                          → onboarding    P-02 aviso + plantilla + moneda + saldos + ejemplo
+/                                    → workspaces    P-01 Elegir espacio; al abrir la app entra en el último (o va a /bienvenida si no hay ninguno)
+/bienvenida                          → onboarding    P-02 aviso + plantilla + moneda + saldos + «Ver con datos de ejemplo»
 /bienvenida/plantilla/:templateId    → onboarding    vista previa de lo que crea la plantilla
-/respaldo                            → backup        P-14 respaldo y restauración
-/ajustes                             → backup        P-15 ajustes de instalación (moneda por defecto, tema, aviso)
+/respaldo                            → backup        P-14 respaldo (cifrado opcional) y restauración
+/ajustes                             → backup        P-15 ajustes de instalación (tema, región, recordatorio, teclado del sistema)
+/plantillas                          → backup        crear un espacio desde un archivo de plantilla / guardar un espacio como plantilla
+/seguridad                           → auth          contraseña, bloqueo automático, clave de recuperación
 /_ui                                 → _gallery      galería del sistema de diseño (solo dev)
-/e/:wsId                             → home          P-03 Inicio
+/e/:wsId                             → home          P-03 Inicio (panel en escritorio, inicio móvil)  ?p=&d=&m=
+/e/:wsId/mas                         → shell         página «Más» (destino de la barra inferior móvil)
 /e/:wsId/cuentas                     → accounts      P-04 Cuentas
-/e/:wsId/cuentas/:accountId          → ledger        P-05 Libro de una cuenta
-/e/:wsId/movimientos                 → ledger        Todos los movimientos del espacio (filtros, vistas)
-/e/:wsId/movimientos/:txId           → ledger        P-09 Detalle (hoja) + historial
-/e/:wsId/lotes/:batchId              → ledger        Movimientos de un lote + anular lote
-/e/:wsId/nuevo?tipo=entrada|salida&cuenta=&desde=:txId   → capture P-06 (desde = duplicar)
-/e/:wsId/captura?cuenta=&tipo=       → capture       P-07 Captura en tabla
-/e/:wsId/transferencia               → capture       P-08 Transferencia
-/e/:wsId/resumen?vista=:viewId       → insights      P-10 Resumen configurable
+/e/:wsId/cuentas/:accountId          → ledger        P-05 Libro de una cuenta (saldo corrido)
+/e/:wsId/movimientos                 → ledger        Todos los movimientos (filtros, vistas, exportar)  ?periodo=&cuenta=&f=&vista=
+/e/:wsId/movimientos/:txId           → ledger        P-09 Detalle (hoja/inspector) + historial
+/e/:wsId/lotes                       → ledger        Lotes recientes
+/e/:wsId/lotes/:batchId              → ledger        Movimientos de un lote + anular/restaurar lote
+/e/:wsId/nuevo?tipo=entrada|salida&cuenta=&editar=:txId&desde=:txId&monto=   → capture P-06 (hoja, alto completo en móvil)
+/e/:wsId/transferencia?desde=:txId&monto=  → capture P-08 (hoja)
+/e/:wsId/captura                     → capture       P-07 Captura en tabla (escritorio) / Ráfaga (móvil)
+/e/:wsId/resumen?vista=:viewId&…     → insights      P-10 Resumen configurable (todo el estado en la URL)
 /e/:wsId/informes                    → reports       P-11 Lista de informes
-/e/:wsId/informes/:viewId|resumido|detallado → reports  Informe generado (imprimible)
-/e/:wsId/historial                   → audit         P-12 Historial general
-/e/:wsId/importar                    → import        P-18 Asistente CSV
-/e/:wsId/ajustes                     → settings      P-13 índice de configuración
+/e/:wsId/informes/:id                → reports       Informe generado (`resumido`, `detallado` o id de vista)
+/e/:wsId/historial                   → audit         P-12 Historial general  ?accion=&…
+/e/:wsId/importar                    → import        P-18 Asistente CSV/XLSX en 4 pasos
+/e/:wsId/ajustes                     → settings      P-13 índice de configuración del espacio
 /e/:wsId/ajustes/espacio|cuentas|campos|campos/:fieldId|vistas → settings
+/e/:wsId/ajustes/plantilla           → backup        guardar este espacio como plantilla
 ```
 
-Filtros activos y periodo van en la query string (`?periodo=this_month&cuenta=…&f=<base64url(JSON)>`) para que "atrás" y compartir enlace funcionen. Navegación: **móvil** barra inferior con 4 entradas `primary` (Inicio, Movimientos, Resumen, Más) y el botón "+" central con las `quickActions`; **escritorio (≥ 1024 px de contenedor, DESIGN §8.1)** barra lateral con selector de espacio arriba y las mismas entradas. View Transitions al navegar donde `document.startViewTransition` exista.
+Un `:wsId` que no existe muestra «Este espacio no existe» (lo resuelve `AppShell`) y no se guarda como último espacio.
 
-El shell también resuelve: pantalla de arranque, `TabLockScreen` ("Cuadra está abierta en otra pestaña · Usar aquí"), `UpdatePrompt` del service worker (`registerType: 'prompt'`), `BootError` (sin OPFS ni IndexedDB → modo solo memoria con banner rojo "los datos no se guardarán").
+**Filtro de movimientos en la URL.** Un solo codificador: `src/app/data/txFilterUrl.ts` (con pruebas). `movementsHref(wsId, filter)` es el enlace que usan Inicio, Resumen y cualquier otra pantalla; Movimientos lee con `readLedgerSearch` y escribe con `writeLedgerSearch`. Formato: `?periodo=<preset|AAAA-MM-DD..AAAA-MM-DD>&cuenta=<id>[,<id>]&f=<base64url sin relleno del JSON UTF-8 de un TxFilter parcial>&vista=<viewId>`; precedencia defecto < `f` < `periodo`/`cuenta`; un `f` o un `periodo` mal formados se ignoran y la pantalla lo avisa. La forma del filtro la valida `parseViewRecipe` del núcleo.
 
-Ruta propia del shell: `/e/:wsId/mas` (página «Más», destino de la barra inferior móvil, que tiene 2 destinos primarios + «Más» + la pastilla Anotar, según DESIGN §8.2).
+Navegación (derivada del registro, sin listas fijas en el shell):
+
+- **Móvil:** barra inferior con 2 destinos `primary` (Inicio, Movimientos) + «Más» + la pastilla Anotar (DESIGN §8.2). El resto de `primary` (Cuentas, Resumen), las entradas `more` y las secciones de ajustes van a `/e/:wsId/mas`, sin repetir destinos ni subpáginas de ajustes.
+- **Escritorio:** barra lateral con Inicio, Movimientos, Cuentas, Resumen; luego Informes, Captura, Historial, Lotes; luego Campos y listas, Importar, Respaldo, Plantillas, Contraseña y bloqueo; al pie «Ajustes del espacio» y «Ajustes» (instalación).
+- **Paleta (Ctrl+K):** las `quickActions`, todas las entradas de navegación más las secciones de ajustes que no tengan ya entrada propia, hasta 5 espacios sin buscar, y las acciones de la app.
+- **Atajos `g` + letra:** `i` Inicio, `m` Movimientos, `c` Cuentas, `r` Resumen, `n` Informes, `h` Historial. Anotar: `e`/`s`/`t` y `r` (Ráfaga, sin `g` delante). `realRegistry.test.ts` comprueba que `findRegistryProblems` no avisa con el registro real.
+
+View Transitions al navegar donde `document.startViewTransition` exista. El shell también resuelve: pantalla de arranque, `TabLockScreen` ("Cuadra está abierta en otra pestaña · Usar aquí"), `UpdatePrompt` del service worker (`registerType: 'prompt'`), `BootError` (sin OPFS ni IndexedDB → modo solo memoria con banner rojo "los datos no se guardarán").
 
 ### 5.4 i18n y formato regional
 
@@ -1914,6 +1937,8 @@ Contratos previos: `Cuadra` completo, `app/data/hooks.ts`, `app/registry`, `ui`.
 | **3E Espacios y bienvenida** | Sonnet medium | `workspaces`, `onboarding` | P-01, P-02 (aviso de responsabilidad, plantilla con vista previa, moneda, saldos iniciales, "Cargar datos de ejemplo") |
 | **3F Configuración, respaldo e importación** | Sonnet medium | `settings`, `backup`, `import` | P-13 (campos: crear/ordenar/desactivar/borrar, opciones: renombrar/fusionar con vista previa del número afectado, cuentas, vistas), P-14/P-15 (respaldo con descarga o `showSaveFilePicker`, restaurar con confirmación, recordatorio, almacenamiento persistente sí/no), P-18 asistente CSV en 5 pasos |
 | **3G Cáscara Tauri** | Sonnet medium | `src-tauri/**`, `src/data/tauri/**` | sección 7.3 |
+
+**Cierre de la Oleada 3 (27 nov 2026).** Entregadas 13 features (`workspaces`, `onboarding`, `home`, `ledger`, `accounts`, `capture`, `insights`, `reports`, `audit`, `settings`, `backup`, `import`, `auth`); 3G (Tauri) no se hizo en esta oleada. Integración: un codificador de filtros compartido (`app/data/txFilterUrl.ts`), shell sin banco de pruebas, peticiones de las features atendidas en `app` y `core` (arreglo de `isBase64` con respaldos cifrados de varios MB, `optimizeDeps` de `read-excel-file`/`write-excel-file`, `AmountKeypad.hideKeys`, `Combobox` sincronizado con `value`, ajuste «Usar el teclado del sistema para montos»). Recorridos de punta a punta probados con Playwright a 390×844 y 1440×900 sin errores de consola. Desviaciones de cada feature respecto a DESIGN: ver los informes de la oleada; las más visibles son la composición del panel de Inicio (pizarra a todo el ancho + columnas 8/4), el Resumen de un gráfico + tabla (sin editor de bloques) y la captura en tabla con tipo y cuenta por lote.
 
 ### Oleada 4 — Integración y calidad
 

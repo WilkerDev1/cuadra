@@ -8,7 +8,7 @@ import { cx } from '../../ui';
 import { htmlAttrs, lightDismissFallback } from '../../ui/lib';
 import { useAuth } from '../data/auth';
 import { useWorkspaces } from '../data/hooks';
-import { useNav, useQuickActions } from '../registry/hooks';
+import { useNav, useQuickActions, useSettingsSections } from '../registry/hooks';
 import { useUiStore } from '../state/uiStore';
 import { buildPaletteItems, filterPalette, groupBySection, type PaletteItem, type PaletteRun } from './palette';
 import { useNavigateWithTransition } from './transitions';
@@ -28,6 +28,8 @@ function PaletteDialog({ open }: { open: boolean }) {
   const quickActions = useQuickActions();
   const wsNav = useNav('workspace');
   const rootNav = useNav('root');
+  const wsSections = useSettingsSections('workspace');
+  const rootSections = useSettingsSections('root');
   const workspaces = useWorkspaces();
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
@@ -46,13 +48,14 @@ function PaletteDialog({ open }: { open: boolean }) {
             wsId,
             quickActions,
             nav: [...wsNav, ...rootNav],
+            sections: [...wsSections, ...rootSections],
             workspaces: workspaces.data ?? [],
             formatMoney: (minor, currency) => Money.format(minor, { locale: getLocale(), currency }),
             authEnabled: auth.enabled,
             theme,
           })
         : [],
-    [open, t, wsId, quickActions, wsNav, rootNav, workspaces.data, auth.enabled, theme],
+    [open, t, wsId, quickActions, wsNav, rootNav, wsSections, rootSections, workspaces.data, auth.enabled, theme],
   );
   const results = useMemo(() => filterPalette(items, query), [items, query]);
 

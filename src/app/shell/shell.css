@@ -5,6 +5,8 @@
 
 /* ───────────────────────────── Marco ───────────────────────────── */
 .shell {
+  /* Alto del encabezado pegado (solo en móvil): las cabeceras pegadas de las features se ponen debajo con él. */
+  --topbar-h: 3.5rem;
   min-block-size: 100dvh;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -107,6 +109,14 @@
   text-decoration: none;
 }
 
+/* Espacio de la URL que no existe */
+.shell-missing {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-4);
+  padding: var(--s-12) var(--gutter);
+}
+
 /* Índice provisional del espacio (WorkspaceStatus) */
 .shell-page {
   display: grid;
@@ -164,7 +174,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  min-block-size: 3.5rem;
+  min-block-size: var(--topbar-h);
   padding-inline: var(--gutter) var(--s-2);
   background: var(--bg);
   border-block-end: var(--bw) solid var(--rule);
@@ -222,6 +232,16 @@
 .ws-trigger--on-forest .spine {
   color: var(--on-forest);
 }
+/* En la barra lateral el nombre del espacio (el cliente, para un contador) cabe en dos líneas antes de cortarse */
+.ws-trigger--on-forest .ws-trigger__name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  line-height: var(--lh-snug);
+  margin-block: var(--s-2);
+}
 .ws-trigger--on-forest .ws-trigger__caret {
   margin-inline-start: auto;
   color: var(--on-forest-2);
@@ -237,6 +257,7 @@
 
 /* Selector: contenido de la hoja (móvil) y del popover (riel y barra lateral) */
 .switcher {
+  container: switcher / inline-size;
   display: grid;
   gap: var(--s-3);
   padding: var(--s-1) var(--s-2) var(--s-3);
@@ -290,21 +311,52 @@
   min-inline-size: 0;
 }
 .switcher__name {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
   font-size: var(--t-h3);
   font-weight: var(--w-strong);
   min-inline-size: 0;
-}
-.switcher__name > :first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Saldo y rótulo «Ejemplo» juntos: a la derecha con ancho; bajo el nombre en la hoja del teléfono */
+.switcher__figure {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: var(--s-2);
+  min-inline-size: 0;
+}
+.switcher__figure .ui-chip {
+  flex: none;
+  min-block-size: 1.5rem;
+  padding-inline: var(--s-2);
+  font-size: var(--t-meta);
+}
+@container switcher (width < 24rem) {
+  .switcher__item {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'spine text' 'spine figure';
+    row-gap: var(--s-1);
+    padding-block: var(--s-3);
+  }
+  .switcher__item > .spine {
+    grid-area: spine;
+  }
+  .switcher__text {
+    grid-area: text;
+  }
+  .switcher__figure {
+    grid-area: figure;
+    flex-direction: row;
+    justify-content: flex-start;
+  }
+}
 .switcher__meta {
   color: var(--ink-3);
   font-size: var(--t-meta);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .switcher__balance {
   font-variant-numeric: var(--num);
@@ -337,7 +389,7 @@
   block-size: var(--icon-row);
 }
 .switcher-pop {
-  inline-size: min(26rem, calc(100vw - 2 * var(--gutter)));
+  inline-size: min(28rem, calc(100vw - 2 * var(--gutter)));
   max-inline-size: none;
   max-block-size: min(30rem, 80dvh);
   overflow: auto;
@@ -356,7 +408,7 @@
   gap: var(--s-2);
   block-size: calc(var(--nav-h) + env(safe-area-inset-bottom));
   padding-block-end: env(safe-area-inset-bottom);
-  padding-inline: 0 var(--s-2);
+  padding-inline: 0 var(--s-3);
   background: var(--surface);
   border-block-start: var(--bw) solid var(--rule);
 }
@@ -435,18 +487,33 @@
   inline-size: var(--icon-row);
   block-size: var(--icon-row);
 }
+/* La pastilla (64 px, DESIGN §8.2) mide lo mismo que la barra: se eleva sobre el borde superior, con un anillo
+   del color de la barra que la «recorta», para que se lea como la acción de la pantalla y no como una pestaña más. */
 .anotar--pill {
   block-size: 4rem;
   border-radius: var(--r-pill);
-  box-shadow: var(--sh-1);
+  translate: 0 calc(-1 * var(--s-4));
+  box-shadow: 0 0 0 var(--s-1) var(--surface), var(--sh-2);
 }
 .anotar--pill .anotar__main {
-  padding-inline: var(--s-4) var(--s-1);
+  gap: var(--s-1);
+  padding-inline: var(--s-4) var(--s-2);
   border-radius: var(--r-pill) 0 0 var(--r-pill);
+  font-size: var(--t-h3);
 }
 .anotar--pill .anotar__caret {
-  inline-size: 2.5rem;
+  inline-size: 2.25rem;
+  padding-inline-end: var(--s-1);
   border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  border-inline-start: var(--bw) solid color-mix(in oklch, var(--on-lime) 18%, transparent);
+}
+.anotar--pill:has(.anotar__main:active) {
+  scale: var(--press-scale);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .anotar--pill {
+    transition: scale var(--d-press) var(--ease-out);
+  }
 }
 .anotar--side {
   inline-size: 100%;
@@ -801,6 +868,9 @@
   .shell-center {
     --gutter: var(--s-6);
   }
+  .shell {
+    --topbar-h: 0px;
+  }
   .shell:not(.shell--root) {
     grid-template-columns: var(--rail-w) minmax(0, 1fr);
   }
@@ -987,7 +1057,8 @@
   .ws-trigger--on-forest .ws-trigger__name {
     flex: 1;
     overflow: hidden;
-    white-space: nowrap;
+    /* hasta dos líneas (ver .ws-trigger--on-forest .ws-trigger__name arriba) */
+    white-space: normal;
   }
   .sidebar__search {
     display: flex;
@@ -1081,6 +1152,14 @@
 }
 
 /* ───────────────────────── Movimiento ───────────────────────── */
+/* La barra inferior y el encabezado móvil tienen su propio grupo: así, mientras la vista nueva se funde, su
+   instantánea no se pinta ENCIMA de la barra fija (se veía el contenido sobre «Inicio · Movimientos · Más»). */
+.bottom-bar {
+  view-transition-name: shell-nav;
+}
+.topbar {
+  view-transition-name: shell-top;
+}
 /* Transición entre vistas: la vista nueva entra con un fundido y 12px de desplazamiento; la navegación no se mueve. */
 @media (prefers-reduced-motion: no-preference) {
   ::view-transition-old(shell-main) {
@@ -1113,4 +1192,36 @@
 .ui-sheet__title:focus-visible {
   box-shadow: none;
   outline: none;
+}
+
+/* Teléfonos de 360 px: pastilla y etiquetas un poco más compactas para que «Movimientos» no se corte */
+@container page (width < 380px) {
+  .anotar--pill .anotar__main {
+    padding-inline: var(--s-3) var(--s-1);
+    font-size: var(--t-body);
+  }
+  .anotar--pill .anotar__main svg {
+    inline-size: var(--icon-row);
+    block-size: var(--icon-row);
+  }
+  .bottom-tabs a span {
+    font-stretch: var(--wd-table);
+  }
+}
+
+/* ───────────────────────── Avisos (toasts) ───────────────────────── */
+/* Compacta: por encima de la pastilla Anotar elevada, no pegados a ella. */
+@container page (width < 600px) {
+  .ui-toasts {
+    inset-block-end: calc(var(--nav-h) + var(--s-4) + var(--s-3) + env(safe-area-inset-bottom));
+  }
+  /* Un solo aviso a la vez en el teléfono: el último. Apilados tapaban el teclado y la lista. */
+  .ui-toasts__list > :not(:last-child) {
+    display: none;
+  }
+}
+/* Dentro de una hoja modal (ToastHost los mueve ahí para que [Deshacer] no quede inerte) van ARRIBA, bajo la barra
+   del título: abajo tapaban «Anotar salida» y el teclado justo después de «+ otro». */
+dialog[open] .ui-toasts {
+  inset-block: calc(var(--s-16) + var(--s-6) + env(safe-area-inset-top)) auto;
 }

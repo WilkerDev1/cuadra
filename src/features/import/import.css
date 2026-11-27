@@ -1,0 +1,452 @@
+/* Feature import: asistente de importación. Solo tokens de src/ui/tokens.css; clases con prefijo imp-.
+   Container queries sobre la propia página (DESIGN §8.1); el shell del espacio ya pone el relleno. */
+
+.imp-page {
+  container-type: inline-size;
+  container-name: imp;
+  display: grid;
+  align-content: start;
+  gap: var(--s-6);
+  inline-size: 100%;
+  max-inline-size: 64rem;
+  margin-inline: auto;
+}
+.imp-head {
+  display: grid;
+  gap: var(--s-4);
+}
+.imp-title {
+  margin: 0;
+}
+.imp-title:focus,
+.imp-h2:focus {
+  outline: none;
+  box-shadow: none;
+}
+.imp-h2 {
+  margin: 0;
+  font-size: var(--t-h2);
+}
+.imp-stack {
+  display: grid;
+  gap: var(--s-4);
+  min-inline-size: 0;
+}
+.imp-note {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+.imp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+/* ───────────── Pasos ───────────── */
+.imp-steps {
+  display: grid;
+  gap: var(--s-2);
+}
+.imp-steps__line {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+.imp-steps__list {
+  display: flex;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.imp-steps__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-inline-size: 0;
+  color: var(--ink-3);
+}
+.imp-steps__item + .imp-steps__item::before {
+  content: '';
+  inline-size: var(--s-6);
+  block-size: var(--bw);
+  background: var(--rule-strong);
+}
+.imp-steps__dot {
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  flex-shrink: 0;
+  border: var(--bw) solid var(--rule-strong);
+  border-radius: var(--r-1);
+  font-size: var(--t-meta);
+  font-variant-numeric: var(--num);
+}
+.imp-steps__dot svg {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+.imp-steps__item.is-current {
+  color: var(--ink);
+  font-weight: var(--w-strong);
+}
+.imp-steps__item.is-current .imp-steps__dot {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+.imp-steps__item.is-done {
+  color: var(--ink-2);
+}
+.imp-steps__item.is-done .imp-steps__dot {
+  border-color: var(--ink-2);
+}
+.imp-steps__label {
+  white-space: nowrap;
+  font-size: var(--t-small);
+}
+/* En móvil solo el paso actual muestra su nombre. */
+@container imp (width < 34rem) {
+  .imp-steps__item:not(.is-current) .imp-steps__label {
+    display: none;
+  }
+  .imp-steps__item + .imp-steps__item::before {
+    inline-size: var(--s-3);
+  }
+}
+
+/* ───────────── Paso a paso ───────────── */
+.imp-step {
+  display: grid;
+  gap: var(--s-5);
+  min-inline-size: 0;
+}
+.imp-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding-block-start: var(--s-4);
+  border-block-start: var(--bw) solid var(--rule);
+}
+
+/* ───────────── 1 · Archivo ───────────── */
+.imp-drop {
+  display: grid;
+  align-content: start;
+  gap: var(--s-3);
+  min-block-size: calc(var(--fila) * 3);
+  padding: 0 var(--s-4);
+  border: var(--bw) dashed var(--rule-strong);
+  border-radius: var(--r-2);
+  background-color: var(--surface);
+  transition: border-color var(--d-micro) var(--ease-out), background-color var(--d-micro) var(--ease-out);
+}
+.imp-drop--over {
+  border-color: var(--ink);
+  background-color: var(--surface-2);
+  border-style: solid;
+}
+.imp-drop--has {
+  min-block-size: 0;
+  padding-block: var(--s-3);
+}
+.imp-drop__msg {
+  margin: 0;
+  padding-block-start: var(--fila);
+  color: var(--ink-2);
+  font-size: var(--t-h3);
+  line-height: var(--fila);
+  padding-block-start: 0;
+  margin-block-start: var(--fila);
+}
+.imp-drop__action {
+  margin-block-start: calc(var(--fila) - var(--target) - var(--s-3));
+  margin-block-end: var(--s-3);
+}
+.imp-loaded {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+}
+@container imp (width < 34rem) {
+  .imp-loaded {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .imp-loaded > :last-child {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+.imp-loaded__icon {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  color: var(--ink-2);
+}
+.imp-loaded__text {
+  min-inline-size: 0;
+}
+.imp-loaded__name {
+  margin: 0;
+  font-weight: var(--w-strong);
+  overflow-wrap: anywhere;
+}
+.imp-loaded__meta {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+}
+.imp-templates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+.imp-templates__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+/* ───────────── 2 · Columnas ───────────── */
+.imp-cols {
+  display: grid;
+  min-inline-size: 0;
+}
+.imp-cols__head {
+  display: none;
+}
+.imp-cols__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-block-start: var(--bw) solid var(--rule-strong);
+}
+.imp-col {
+  display: grid;
+  gap: var(--s-1) var(--s-4);
+  padding-block: var(--s-3);
+  border-block-end: var(--bw) solid var(--rule);
+  min-inline-size: 0;
+}
+.imp-col__name {
+  font-weight: var(--w-strong);
+  overflow-wrap: anywhere;
+}
+.imp-col--ignored .imp-col__name {
+  color: var(--ink-2);
+  font-weight: var(--w-body);
+}
+.imp-col__samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s-3);
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+  min-inline-size: 0;
+}
+.imp-col__samples > span {
+  max-inline-size: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.imp-col__select {
+  min-inline-size: 0;
+}
+@container imp (width >= 44rem) {
+  .imp-cols__head,
+  .imp-col {
+    grid-template-columns: minmax(7rem, 1fr) minmax(0, 2fr) minmax(12rem, 18rem);
+    align-items: center;
+  }
+  .imp-cols__head {
+    display: grid;
+    gap: var(--s-4);
+    padding-block-end: var(--s-2);
+    color: var(--ink-2);
+    font-size: var(--t-micro);
+    font-weight: var(--w-medium);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+}
+.imp-problems {
+  display: grid;
+  gap: var(--s-1);
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  list-style: none;
+  border-radius: var(--r-1);
+  background: var(--warn-wash);
+  color: var(--warn-ink);
+  font-size: var(--t-small);
+}
+.imp-opts {
+  display: grid;
+  gap: var(--s-4);
+}
+@container imp (width >= 44rem) {
+  .imp-opts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+.imp-invalues {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+}
+.imp-legend {
+  margin-block-end: var(--s-2);
+  font-weight: var(--w-medium);
+}
+.imp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+/* ───────────── 3 · Vista previa ───────────── */
+.imp-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.imp-summary__line {
+  margin: 0;
+  font-size: var(--t-h3);
+  font-weight: var(--w-strong);
+  font-variant-numeric: var(--num);
+}
+.imp-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4) var(--s-8);
+  margin: 0;
+}
+.imp-totals > div {
+  display: grid;
+  gap: var(--s-1);
+  justify-items: start;
+}
+.imp-totals dt {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+.imp-totals dd {
+  margin: 0;
+}
+.imp-newopts {
+  font-size: var(--t-small);
+}
+.imp-newopts > summary {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--target);
+  cursor: pointer;
+  font-weight: var(--w-medium);
+}
+.imp-newopts ul {
+  display: grid;
+  gap: var(--s-1);
+  margin: 0 0 var(--s-2);
+  padding: 0;
+  list-style: none;
+}
+.imp-check {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: var(--target);
+  min-block-size: var(--target);
+  margin-block: calc(var(--s-3) * -1);
+  margin-inline: calc(var(--s-3) * -1);
+  cursor: pointer;
+}
+.imp-check input {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  margin: 0;
+}
+.imp-cell--warn {
+  display: block;
+  margin: calc(var(--s-1) * -1) calc(var(--s-2) * -1);
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-1);
+  background: var(--warn-wash);
+  color: var(--warn-ink);
+}
+.imp-status {
+  font-size: var(--t-meta);
+  color: var(--ink-3);
+}
+.imp-status--error,
+.imp-status--warning {
+  color: var(--warn-ink);
+}
+.imp-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+/* ───────────── 4 · Confirmar y listo ───────────── */
+.imp-confirm__lede {
+  margin: 0;
+  font-size: var(--t-h3);
+  max-inline-size: 40rem;
+}
+.imp-confirm__fig {
+  display: flex;
+}
+.imp-confirm__list {
+  display: grid;
+  gap: var(--s-1);
+  margin: 0;
+  padding-inline-start: var(--s-4);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+.imp-done {
+  display: flex;
+  gap: var(--s-5);
+  align-items: flex-start;
+}
+.imp-done__text {
+  display: grid;
+  gap: var(--s-3);
+  justify-items: start;
+  min-inline-size: 0;
+}
+.imp-done__text p {
+  margin: 0;
+}
+.imp-primarylink {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--target);
+  padding-inline: var(--s-5);
+  border-radius: var(--r-2);
+  background: var(--lime);
+  color: var(--on-lime);
+  font-weight: var(--w-strong);
+  text-decoration: none;
+}
+
+.imp-filter {
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: var(--s-1);
+}
+.imp-filter .ui-seg {
+  inline-size: max-content;
+}

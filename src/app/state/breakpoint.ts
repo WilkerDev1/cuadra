@@ -49,7 +49,16 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
+/**
+ * Sin observador todavía (primer render de la app), se mide en el acto: si no, un enlace directo a una hoja en
+ * escritorio se pintaba primero como hoja modal (`compact`) y luego saltaba al inspector, cerrándose por el camino.
+ */
+function snapshot(): Breakpoint {
+  if (observer === null && typeof document !== 'undefined' && document.body !== null) current = breakpointFor(document.body.clientWidth);
+  return current;
+}
+
 /** Ancho actual del shell como clase. En pruebas de nodo (sin DOM) es siempre `compact`. */
 export function useBreakpoint(): Breakpoint {
-  return useSyncExternalStore(subscribe, () => current, () => 'compact');
+  return useSyncExternalStore(subscribe, snapshot, () => 'compact');
 }

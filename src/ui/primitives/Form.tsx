@@ -210,7 +210,14 @@ export function Combobox({ options, value, onChange, onCreate, placeholder, id, 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const selected = options.find((o) => o.value === value);
-  const [text, setText] = useState(selected?.label ?? '');
+  const selectedLabel = selected?.label ?? '';
+  const [text, setText] = useState(selectedLabel);
+  // Si `value` (o su etiqueta) cambia desde fuera, el texto se pone al día; lo que se está escribiendo no se toca.
+  const [synced, setSynced] = useState({ value, label: selectedLabel });
+  if (synced.value !== value || synced.label !== selectedLabel) {
+    setSynced({ value, label: selectedLabel });
+    setText(selectedLabel);
+  }
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const query = normalizeForSearch(text);

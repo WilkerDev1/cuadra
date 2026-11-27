@@ -40,11 +40,12 @@ export function LockGate({ children }: { children: ReactNode }) {
         {children}
       </div>
       {locked && LockScreen !== null ? (
-        <div className="lock-layer">
+        // La app (con su <main>) queda oculta: la pantalla de bloqueo es el contenido principal.
+        <main className="lock-layer">
           <Suspense fallback={<LoadingScreen />}>
             <LockScreen busy={!auth.ready} />
           </Suspense>
-        </div>
+        </main>
       ) : null}
     </>
   );

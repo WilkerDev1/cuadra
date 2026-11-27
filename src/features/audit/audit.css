@@ -1,0 +1,57 @@
+/* Historial general: filtros, días y entradas. Solo tokens; clases con prefijo `aud-`. */
+.aud {
+  container: aud / inline-size;
+  display: grid; gap: var(--s-4);
+  inline-size: 100%; max-inline-size: 56rem; min-inline-size: 0;
+}
+.aud-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.aud-title { margin: 0; }
+.aud-note { margin: calc(-1 * var(--s-2)) 0 0; font-size: var(--t-meta); color: var(--ink-3); max-inline-size: 60ch; }
+
+/* ── Filtros ─────────────────────────────────────────────────────────────────────── */
+.aud-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); align-items: end; }
+.aud-filters__period { grid-column: 1 / -1; display: grid; gap: var(--s-1); justify-items: start; }
+.aud-filters__label { font-size: var(--t-small); font-weight: var(--w-medium); color: var(--ink-2); }
+.aud-filters__clear { justify-self: start; }
+@container aud (width >= 40rem) {
+  .aud-filters { grid-template-columns: auto repeat(3, minmax(0, 1fr)); }
+  .aud-filters__period { grid-column: auto; align-self: end; }
+  .aud-filters__clear { grid-column: 1 / -1; }
+}
+
+/* ── Días y entradas ─────────────────────────────────────────────────────────────── */
+.aud-list { border-block-start: var(--bw) solid var(--rule-strong); }
+.aud-list .ui-ledger__head { padding-inline: var(--s-1); }
+@container page (width < 600px) { .aud-list .ui-ledger__head { inset-block-start: 3.5rem; } }
+.aud-day__date { font-weight: var(--w-body); color: var(--ink-3); }
+
+.aud-entry {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  column-gap: var(--s-3);
+  align-items: start;
+  padding: var(--s-3) var(--s-1);
+  border-block-end: var(--bw) solid var(--rule);
+}
+.aud-entry__time { white-space: nowrap; padding-block-start: 0.1rem; font-size: var(--t-small); font-stretch: var(--wd-tight); font-weight: var(--w-medium); color: var(--ink-3); }
+.aud-entry__main { display: grid; gap: var(--s-1); min-inline-size: 0; }
+.aud-entry__text { margin: 0; overflow-wrap: anywhere; }
+.aud-entry__meta { margin: 0; display: flex; flex-wrap: wrap; column-gap: var(--s-3); font-size: var(--t-meta); color: var(--ink-3); }
+.aud-entry__meta > span + span::before { content: '·'; margin-inline-end: var(--s-3); }
+.aud-entry__link { color: var(--accent-ink); display: inline-flex; align-items: center; min-block-size: 1.5rem; }
+@media (pointer: coarse) { .aud-entry__link { min-block-size: var(--target); margin-block: calc(-1 * var(--s-3)) calc(-1 * var(--s-3)); } }
+.aud-entry__amount { text-align: end; padding-block-start: 0.05rem; }
+.aud-entry__reason { margin: 0; font-size: var(--t-small); color: var(--ink-2); }
+
+.aud-changes { list-style: none; margin: var(--s-1) 0 0; padding: 0; display: grid; gap: var(--s-1); }
+.aud-change { display: grid; grid-template-columns: minmax(5rem, 8rem) minmax(0, 1fr); gap: var(--s-3); font-size: var(--t-small); }
+.aud-change--more { grid-template-columns: minmax(0, 1fr); color: var(--ink-3); }
+.aud-change__label { color: var(--ink-2); }
+.aud-change__old { color: var(--ink-3); text-decoration-thickness: 1px; }
+.aud-change__values { overflow-wrap: anywhere; font-variant-numeric: var(--num); }
+@container aud (width < 30rem) {
+  .aud-entry { grid-template-columns: minmax(0, 1fr) auto; }
+  .aud-entry__time { grid-column: 1 / -1; padding-block-start: 0; }
+  .aud-change { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+.aud-more { display: flex; justify-content: center; padding-block: var(--s-4); }

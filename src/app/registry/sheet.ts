@@ -11,9 +11,16 @@ export interface SheetApi {
   close(): void;
   /** Con `true`, cerrar pide confirmación («¿Descartar los cambios?»). Llámalo con cada cambio de borrador. */
   setDirty(dirty: boolean): void;
+  /** Título ya traducido que sustituye al `titleKey` de la ruta (p. ej. «Editar movimiento»); `null` vuelve al de la ruta. */
+  setTitle(title: string | null): void;
 }
 
-export const SheetContext = createContext<SheetApi>({ mode: null, close: () => undefined, setDirty: () => undefined });
+export const SheetContext = createContext<SheetApi>({
+  mode: null,
+  close: () => undefined,
+  setDirty: () => undefined,
+  setTitle: () => undefined,
+});
 
 export function useSheet(): SheetApi {
   return useContext(SheetContext);

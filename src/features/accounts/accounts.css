@@ -1,0 +1,234 @@
+/* Cuentas (DESIGN §10.4). Solo tokens; contenedor propio para las consultas de ancho. */
+.acc {
+  container-type: inline-size;
+  container-name: acc;
+  inline-size: 100%;
+  max-inline-size: var(--content-max);
+  margin-inline: auto;
+  display: grid;
+  gap: var(--s-6);
+  align-content: start;
+}
+.acc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+
+/* ── Móvil: grupos ─────────────────────────────────────────────── */
+.acc-list {
+  display: grid;
+  gap: var(--s-6);
+}
+.acc-group {
+  display: grid;
+  gap: var(--s-2);
+}
+.acc-group__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.acc-group__head h2 {
+  font-size: var(--t-h3);
+}
+/* Subtotales y total general en la MISMA columna que los saldos de las filas: las filas reservan a la derecha el
+   botón ⋯ (objetivo de 48 px) y sus márgenes; las cabeceras y el total dejan el mismo hueco. */
+.acc-group__head,
+.acc-foot > .ui-total {
+  padding-inline-end: calc(var(--s-1) + var(--target) + var(--s-1));
+}
+.acc-group__head {
+  padding-inline-start: var(--gutter);
+}
+.acc-foot > .ui-total {
+  padding-inline-start: var(--gutter);
+}
+.acc-row .ui-row__more {
+  flex-shrink: 0;
+}
+.acc-neg {
+  color: var(--warn-ink);
+  font-weight: var(--w-medium);
+}
+.acc-foot {
+  display: grid;
+  gap: var(--s-2);
+}
+.acc-trail {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.acc-spark {
+  display: none;
+}
+@container acc (width >= 400px) {
+  .acc-spark {
+    display: inline-flex;
+  }
+}
+.acc-new-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-block-size: var(--fila);
+  padding-inline: var(--gutter);
+  border: 0;
+  border-block-end: var(--bw) solid var(--rule);
+  background: transparent;
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: var(--w-medium);
+  cursor: pointer;
+  text-align: start;
+}
+.acc-new-row svg {
+  inline-size: var(--icon-row);
+  block-size: var(--icon-row);
+}
+@media (hover: hover) {
+  .acc-new-row:hover {
+    background: var(--surface-2);
+  }
+}
+
+/* ── Archivadas ────────────────────────────────────────────────── */
+.acc-archived > summary {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--target);
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+  cursor: pointer;
+}
+.acc-archived > summary {
+  gap: var(--s-2);
+  list-style: none;
+}
+.acc-archived > summary::-webkit-details-marker {
+  display: none;
+}
+.acc-archived__chev {
+  inline-size: var(--icon-row);
+  block-size: var(--icon-row);
+  color: var(--ink-3);
+  transition: rotate var(--d-micro) var(--ease-out);
+}
+.acc-archived[open] .acc-archived__chev {
+  rotate: 90deg;
+}
+@supports (interpolate-size: allow-keywords) {
+  .acc-archived::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition: block-size var(--d-micro) var(--ease-out), content-visibility var(--d-micro) allow-discrete;
+  }
+  .acc-archived[open]::details-content {
+    block-size: auto;
+  }
+}
+
+/* ── Escritorio: tabla con orden manual ────────────────────────── */
+.acc-table {
+  position: relative;
+  display: grid;
+  gap: var(--s-2);
+}
+.acc-name {
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.acc-name > svg {
+  inline-size: var(--icon-row);
+  block-size: var(--icon-row);
+  color: var(--ink-2);
+  flex-shrink: 0;
+}
+.acc-name__link {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+  text-decoration: none;
+}
+.acc-name__link:focus-visible {
+  border-radius: var(--r-1);
+}
+@media (hover: hover) {
+  .acc-name__link:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+}
+.acc-handle {
+  display: grid;
+  place-items: center;
+  inline-size: var(--target);
+  block-size: var(--target);
+  margin-block: calc((var(--fila) - var(--target)) / 2);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.acc-handle svg {
+  inline-size: var(--icon-row);
+  block-size: var(--icon-row);
+}
+.acc-handle:is(:hover, :focus-visible) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.acc-handle[aria-pressed='true'] {
+  background: var(--sunken);
+  color: var(--ink);
+}
+:root.acc-dragging,
+:root.acc-dragging * {
+  cursor: grabbing !important;
+}
+.acc-drop {
+  position: absolute;
+  inset-inline: 0;
+  block-size: var(--bw-2);
+  margin-block-start: -1px;
+  background: var(--ink);
+  pointer-events: none;
+}
+.acc-hint,
+.acc-foot-label {
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+}
+.acc-foot-label {
+  color: var(--ink-2);
+  font-weight: var(--w-strong);
+  font-size: var(--t-small);
+}
+.acc-form {
+  display: grid;
+  gap: var(--s-4);
+}
+.acc-form__group {
+  display: grid;
+  gap: var(--s-3);
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.acc-form__group > legend {
+  padding: 0;
+  margin-block-end: var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}

@@ -6,7 +6,7 @@ import {
   selectQuickActions,
   selectSettingsSections,
 } from './select';
-import type { HomeCardDef, LockScreenDef, NavEntry, QuickAction, Scope, SettingsSectionDef } from './types';
+import type { FeatureRoute, HomeCardDef, LockScreenDef, NavEntry, QuickAction, Scope, SettingsSectionDef } from './types';
 
 // El registro es estático (se resuelve en tiempo de compilación con import.meta.glob), así que
 // estos hooks devuelven siempre las mismas listas ya ordenadas y estables entre renders.
@@ -30,6 +30,11 @@ export function useHomeCards(): HomeCardDef[] {
 
 export function useSettingsSections(scope: Scope = 'workspace'): SettingsSectionDef[] {
   return memo(`settings|${scope}`, () => selectSettingsSections(features, scope));
+}
+
+/** La ruta índice del espacio (`home`), o `null`. El shell la pinta detrás de una hoja abierta por enlace directo. */
+export function useWorkspaceIndexRoute(): FeatureRoute | null {
+  return memo('ws-index', () => features.flatMap((f) => f.routes ?? []).find((r) => r.scope === 'workspace' && r.path === '') ?? null);
 }
 
 /** La pantalla de bloqueo registrada por la feature de autenticación, o `null` si nadie la registró. */

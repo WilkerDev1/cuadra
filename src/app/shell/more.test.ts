@@ -28,6 +28,14 @@ describe('buildMoreGroups', () => {
     expect(groups.map((g) => g.group)).toEqual(['config']);
     expect(groups[0]?.entries.map((e) => e.id)).toEqual(['ajustes-campos', 'settings:views']);
   });
+  it('las subpáginas de una entrada de ajustes no se repiten en «Más»', () => {
+    const groups = buildMoreGroups({
+      primary: [],
+      more: [nav('settings', 'settings', 90, { to: 'ajustes' }), nav('import', 'more', 60, { to: 'importar', group: 'config' })],
+      sections: [section('accounts', 'ajustes/cuentas', 1), section('import', 'importar', 2), section('other', 'otra', 3)],
+    });
+    expect(groups.flatMap((g) => g.entries.map((e) => e.to))).toEqual(['otra', 'importar', 'ajustes']);
+  });
   it('sin nada que mostrar devuelve una lista vacía', () => {
     expect(buildMoreGroups({ primary: [nav('a', 'primary', 1)], more: [], sections: [] })).toEqual([]);
   });

@@ -15,8 +15,12 @@ export function buildMoreGroups(input: MoreInputs): Array<{ group: NavGroup; ent
   const { overflow } = splitBottomBar(input.primary);
   const entries: NavEntry[] = [...overflow, ...input.more];
   const seen = new Set(entries.map((e) => `${e.scope}:${e.to}`));
+  // Las subpáginas de una entrada de ajustes (ajustes/espacio, ajustes/cuentas…) ya se alcanzan desde su índice:
+  // listarlas aquí repetía nombres («Cuentas» del libro y «Cuentas» de ajustes).
+  const settingsRoots = input.more.filter((e) => e.placement === 'settings' && e.to !== '');
+  const underSettings = (s: SettingsSectionDef) => settingsRoots.some((e) => e.scope === s.scope && s.to.startsWith(`${e.to}/`));
   for (const section of input.sections) {
-    if (seen.has(`${section.scope}:${section.to}`)) continue;
+    if (seen.has(`${section.scope}:${section.to}`) || underSettings(section)) continue;
     seen.add(`${section.scope}:${section.to}`);
     entries.push({
       id: `settings:${section.id}`,

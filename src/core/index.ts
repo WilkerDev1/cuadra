@@ -165,6 +165,14 @@ export {
 export { groupFilter, previousRange } from './services/queries';
 export { serializeTemplate, templateFileName } from '../templates/schema';
 export { DEMO_PROFILES, hashPlan, type DemoPlan } from './demo';
+export {
+  AUTH_DEFAULT_AUTO_LOCK_MINUTES,
+  AUTH_FREE_ATTEMPTS,
+  AUTH_MAX_AUTO_LOCK_MINUTES,
+  AUTH_MAX_PASSWORD_LENGTH,
+  AUTH_MAX_PROFILE_NAME_LENGTH,
+  AUTH_MIN_PASSWORD_LENGTH,
+} from './services/auth';
 
 export type { AccountsService, OpeningInput } from './services/accounts';
 export type { AuditService } from './services/audit';
@@ -181,7 +189,7 @@ export type {
   BackupTable,
 } from './services/backup';
 export type { BatchesService, CaptureInput, CaptureResult, CaptureRow, CaptureRowError } from './services/batches';
-export type { DemoProfile, DemoProfileId, DemoSeedResult, DemoService } from './services/demo';
+export type { DemoPhase, DemoProfile, DemoProfileId, DemoProgress, DemoSeedOptions, DemoSeedResult, DemoService } from './services/demo';
 export type { FieldsService, FormSchema } from './services/fields';
 export type {
   Cell,
