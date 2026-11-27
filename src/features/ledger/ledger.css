@@ -416,6 +416,16 @@
   padding: 0;
   border: 0;
 }
+@container lgt (width < 1280px) {
+  /* Escritorio con tres campos de lista (organización, despacho): sin esto la última columna queda cortada a 1440. */
+  .lg-t td:not(.is-end, .lg-t__concept) {
+    max-inline-size: 8rem;
+  }
+  .lg-t thead th.lg-t__money {
+    white-space: normal;
+    min-inline-size: 5rem;
+  }
+}
 @container lgt (width < 820px) {
   /* Clase expandida con la barra lateral (≈ 712px a 1024px): la tabla tiene que caber sin desplazar la página. */
   .lg-t td {

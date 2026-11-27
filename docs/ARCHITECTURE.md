@@ -1138,8 +1138,14 @@ export interface QueriesService {
 // DashboardOptions: { period?, months? (1–60, 12), seriesUnit? ('day'|'week'|'month'), breakdown?: GroupBy,
 //   measure? ('in'|'out'|'net'), topLimit? (5), recentLimit? (8) }
 // DashboardData: saldo y KPIs del periodo y del anterior, flujo mensual, series por cuenta, reparto con
-//   comparación, top de categorías y contactos, attention { negativeAccounts, unbalancedBatches, backup },
-//   recent. Tipos exactos en src/core/services/queries.ts; la fachada exporta además groupFilter() (clic en
+//   comparación, top de categorías y contactos, attention { negativeAccounts, unbalancedBatches,
+//   possibleDuplicates, backup }, recent, y para las gráficas del periodo (§5.5):
+//   - daily: un punto por día del periodo { date, inMinor, outMinor, netMinor, balanceMinor, count }, hasta
+//     hoy o, si hay movimientos con fecha posterior, hasta el último (sin pasar del fin del periodo): sus sumas
+//     son las de period.totals. Como mucho 1 100 días (los últimos).
+//   - dailyOpeningMinor: saldo total al cierre del día anterior al primer punto.
+//   - previousDaily: { openingMinor, balances: [{ date, balanceMinor }] } del periodo anterior equivalente, o null.
+//   Tipos exactos en src/core/services/queries.ts; la fachada exporta además groupFilter() (clic en
 //   una barra o categoría → TxFilter) y previousRange().
 
 // ── Informes ───────────────────────────────────────────────────────────
@@ -1861,6 +1867,18 @@ View Transitions al navegar donde `document.startViewTransition` exista. El shel
 - **Formato:** `src/i18n/format.ts` con `Intl` cacheado por locale: `formatMoney` (envuelve `Money.format` con la moneda del espacio), `formatDate` (`26 nov 2026`), `formatDayHeader` (`Hoy`, `Ayer`, `jueves 26`), `formatPeriod` (`noviembre 2026`, `T4 2026`). Locale por defecto **`es-DO`**, moneda por defecto **DOP, 2 decimales, símbolo `RD$`**. Locale en ajustes de instalación; moneda por espacio (un contador puede tener un cliente en USD).
 - Semana empieza en lunes. Fechas de entrada con `<input type="date">` nativo + atajos (Hoy, Ayer) en chips.
 
+### 5.5 Panel de Inicio (escritorio): gráficas por periodo
+
+El panel (`features/home`, `?p=month|quarter|year|12m[:offset]`) dibuja sus dos gráficas con la rejilla del periodo elegido, a partir de `DashboardData.daily`, `dailyOpeningMinor` y `previousDaily` (una sola consulta; `flow` y `series` de 12 meses solo alimentan las mini-líneas de las cuentas). La lógica es pura y está probada en `logic/buckets.ts` y `logic/chart.ts`:
+
+- **Granularidad** (`grainFor`, deducida de la duración del rango de los datos, no del botón): mes → día; trimestre → semana de lunes a domingo recortada al trimestre; año y 12 meses → mes. Cada semana pertenece al mes que tiene la mayoría de sus días (`bucketMonth`: «31 ago – 6 sept» es de septiembre); ahí van el rótulo y el separador de mes. Las semanas parciales del borde («1 – 4 oct») llevan la barra más estrecha en proporción a sus días y lo dicen en la ficha y en la tabla.
+- **Cubos** (`buildBuckets`): suman todos los días del cubo, también los posteriores a hoy. Un movimiento con fecha futura cuenta en la barra de su cubo (dibujada «programada»: lavado y contorno discontinuo), así la suma de las barras es siempre `period.totals` y el clic en una barra abre en Movimientos exactamente lo que suma. El cierre de cada cubo (`closeMinor`) es el saldo hasta hoy; `endMinor` cuenta lo programado.
+- **Saldo** (`BalanceChart`): la apertura en el borde izquierdo y el cierre de cada cubo al centro de su cubo, bajo su rótulo (`centeredX`; el cursor elige la posición más cercana con `nearestOf`). La línea sólida acaba en hoy; si hay programados, sigue un tramo de puntos (`PeriodChart.projection`) hasta el último. El área se cierra en el cero, no en el fondo. La comparación punteada con el periodo anterior se alinea por posición y solo se dibuja si cubre al menos un tercio de las posiciones (si no, sin línea ni leyenda).
+- **Ejes:** rótulos centrados en su cubo que no salen del lienzo (`AxisLabels`, el primero y el último se apoyan en el borde); los de días futuros no se atenúan (contraste ≥4.5:1), lo futuro lo marca el eje punteado. La columna de la escala Y tiene un ancho mínimo, la cabecera del flujo va siempre en dos renglones, «Volver a hoy» reserva su sitio y la comparación de los KPI reserva dos renglones: al cambiar de modo o de periodo nada salta.
+- **Movimiento:** trazo y barras se animan solo en la primera entrada (`useSettled` pone `.is-settled`); al cambiar de periodo las series cambian sin volver a animarse (DESIGN §14). Con movimiento reducido, nada.
+- **Nombres de periodo:** los rangos de meses enteros se acortan en títulos, pizarra y KPI (`chartPeriodLabel`: «dic 2025 – nov 2026»).
+- **Móvil:** la mini-línea del saldo va de la apertura del mes a hoy (ignora los días posteriores de `daily`).
+
 ---
 
 ## 6. Datos de demostración
@@ -1873,7 +1891,7 @@ export function mulberry32(seed: number): () => number;     // [0,1)
 export interface Rng { next(): number; int(min: number, max: number): number; pick<T>(xs: readonly T[]): T;
   chance(p: number): boolean; normalMinor(meanMinor: Minor, sdMinor: Minor, roundTo: Minor): Minor }
 
-// src/core/demo/plan.ts (tipos, hashPlan, calendario) · index.ts (planDemo, DEMO_PROFILES) · colmado|despacho|personal.ts
+// src/core/demo/plan.ts (tipos, hashPlan, calendario) · index.ts (planDemo, DEMO_PROFILES) · colmado|despacho|personal|iglesia.ts
 // Forma real: DemoPlan gana profile, start/anchor, extraAccounts, extraFields, extraOptions, steps (la historia)
 // y backupVerifiedDaysAgo; los anulados van como pasos 'void' en vez de `voids`. Esquema de abajo = idea original.
 export interface DemoPlan {
@@ -1887,7 +1905,7 @@ export interface DemoPlan {
     | { t: 'capture'; account: string; kind: 'income' | 'expense'; date: IsoDate; label: string; controlTotalMinor: Minor; rows: Array<{ amountMinor: Minor; description: string; values: Record<string, string> }> }>;
   voids: Array<{ index: number; reason: string }>;
 }
-export function planDemo(profile: 'colmado' | 'despacho' | 'personal', opts: { seed?: number; anchor: IsoDate; months?: number }): DemoPlan;
+export function planDemo(profile: 'colmado' | 'despacho' | 'personal' | 'iglesia', opts: { seed?: number; anchor: IsoDate; months?: number }): DemoPlan;
 export function hashPlan(plan: DemoPlan): string;           // para la prueba de determinismo
 // DemoService.seed = templates.apply + traducir claves a ids + transactions.createMany (UNA acción demo_seed)
 ```
@@ -1900,7 +1918,7 @@ Reglas comunes: semilla fija `20261126`; ancla = `clock.today()` (los datos siem
 2. UNA unidad de trabajo con UNA acción `demo_seed`: cuentas, campos y opciones extra y todos los movimientos con `insertBatch` (un lote `capture` por día de ventas, los lotes `import` y un lote `demo` por día con el resto, para que el `seq` de cada cuenta siga el orden de las fechas y `recorded_at` caiga ese día).
 3. La historia (ediciones, anulaciones con motivo, una restauración, lote "Día duplicado" anulado, fusión de opciones, renombre, campo desactivado, cuenta archivada) con los servicios públicos y un reloj guionizado: cada acción de historial lleva la fecha en que ocurre en el plan.
 
-Si algo falla tras crear el espacio, se borra entero (`workspaces.purge`). Además del colmado y el despacho hay un tercer perfil, **"Finanzas de la casa"** (plantilla Finanzas personales: salario quincenal, ahorro, tarjeta, un estado de cuenta importado y un viaje anotado en la tabla de captura). Volúmenes con ancla 2026-11-27: colmado ≈ 2 400 movimientos, despacho ≈ 620, personal ≈ 510 (el rango 1 800–2 600 se cumple por perfil grande, no en total). Si no había respaldo verificado, se registra uno de hace 41 días para que el recordatorio salga vencido. Solo las tarjetas pasan por saldo negativo; caja y bancos nunca (prueba). Tiempo en Node: colmado ≈ 0,6–0,9 s.
+Si algo falla tras crear el espacio, se borra entero (`workspaces.purge`). Además del colmado y el despacho hay un tercer perfil, **"Mis finanzas"** (plantilla Finanzas personales: salario quincenal, ahorro, tarjeta, un estado de cuenta importado y un viaje anotado en la tabla de captura), y un cuarto, **"Iglesia Camino de Luz"** (plantilla Organización, 6.3), para probar el caso de una organización sin fines de lucro. `seedAll` los carga en ese orden. Volúmenes con ancla 2026-11-27 (`countPlanTransactions`): colmado 4 785 movimientos, despacho 1 197, personal 1 241, iglesia 1 532; en total 8 755, dentro del rango 6 000–9 000 que fija la prueba. Tiempo de `seedAll` con los cuatro: ≈ 3,5 s en Node y ≈ 11,6 s en el navegador (la iglesia, ≈ 2,1 s). Si no había respaldo verificado, se registra uno de hace 41 días para que el recordatorio salga vencido. Solo las tarjetas pasan por saldo negativo; caja y bancos nunca (prueba). Tiempo en Node: colmado ≈ 0,6–0,9 s.
 
 ### 6.1 Perfil "Colmado La Esquina" (plantilla Negocio pequeño)
 
@@ -1930,6 +1948,27 @@ Un cliente de servicios de un contador independiente; el espacio lleva `ownerNam
 | Conciliado | Sí en lo de más de 15 días; no en el mes actual (para que el filtro guardado "No conciliados" muestre algo) |
 | Importación | Un lote `import` de un mes histórico (simula un CSV traído desde Excel) |
 | Anulados | 4 con motivo |
+
+### 6.3 Perfil "Iglesia Camino de Luz" (plantilla Organización)
+
+Una iglesia mediana (≈ 230 personas el domingo), ficticia y sin denominación: ningún nombre de iglesia, denominación, persona ni marca real (la prueba lo comprueba). Fundada en 2011 en la historia del plan; alquila el local mientras construye su templo con un fondo aparte.
+
+| Elemento | Generación |
+|---|---|
+| Cuentas | Caja (RD$ 6,000), Cuenta bancaria (RD$ 210,000), Caja chica (RD$ 5,000) y la cuenta extra **Fondo de construcción** (ahorro, RD$ 260,000). Ninguna pasa por negativo |
+| Conteo de la ofrenda | Un **lote de captura** en Caja por culto con su total de control: domingo (diezmos en sobre y sin sobre, ofrenda general con asistentes, escuela dominical, pro-templo; misionera el primer domingo, damas el último, canastas en diciembre), miércoles (culto de oración: diezmos y ofrenda) y sábado (culto de jóvenes). Tres domingos con descuadre aceptado («diferencia de RD$ X con el acta de conteo») y un conteo del miércoles anotado dos veces que se anula entero |
+| Banco y fondo | Diezmos por transferencia (más tras la quincena), donaciones pro-templo (anónimas o no) directo al fondo, donaciones para la ayuda social, intereses del fondo |
+| Fijos | Alquiler del local (RD$ 60,000), electricidad (más en verano), agua, internet, sustento pastoral quincenal, secretaria, conserje y director de alabanza; misiones (10 % de los diezmos + la ofrenda misionera) y aporte a la red de iglesias (5 %); beca escolar mensual |
+| Variables | Ayudas sociales (≈ 5 al mes), sonido e instrumentos, limpieza, pasajes para visitas, mantenimiento, Santa Cena, escuela dominical, merienda de jóvenes |
+| Temporadas | Diciembre fuerte (+30 %, Nochebuena, vigilia, canastas, juguetes, cantata, regalía), enero flojo (−22 %), julio y agosto algo menos; Semana Santa (retiro con inscripciones, Viernes Santo, Domingo de Resurrección con más asistencia), campamento de jóvenes en julio, aniversario en septiembre, Día del Pastor en octubre, Día de las Madres y de los Padres, útiles escolares en agosto, ventas de comida pro-templo |
+| Movimientos entre cuentas | Lunes: lo pro-templo de Caja a la cuenta del fondo y el resto del conteo al banco; jueves: el conteo del miércoles; reposición de la caja chica los días 2 y 16; el día 26, el excedente del banco sobre RD$ 270,000 al fondo |
+| Obra del templo | Materiales cada mes desde el fondo y tres etapas grandes (meses 5, 9 y 13) que dejan el fondo cerca de RD$ 80,000: así el saldo total baja y se recupera |
+| Campos | Los de la plantilla (Categoría, Fondo, Persona o entidad, Método de pago, Recibo n.º, Fecha de la actividad, Asistentes, Conciliado) más **Ministerio** (lista, papel centro de costo) y **Culto o actividad** (lista). Los cinco tipos llevan valores |
+| Importación | El estado de la cuenta bancaria del cuarto mes, importado desde una hoja `.xlsx` |
+| Historia | Un diezmo duplicado que se anula, 4 gastos variables anulados con un motivo que cuadra con su cuenta (la transferencia «que parecía no haber salido» se restaura), 8 ediciones (recibo que llega después, pasajes reasignados a acción social, monto corregido con la factura, mes de la factura de luz) y 3 compras a proveedores con tres ediciones cada una; nunca se anulan ni rebajan salarios, alquiler ni aportes (prueba). Fusión «Ministerio juvenil» → «Jóvenes», renombre de un proveedor |
+| Vistas extra | «Diezmos y ofrendas por mes» (fijada), «Gastos por ministerio», «Ayudas sociales del año», «Ofrendas pro-templo y donaciones», «Informe mensual a la directiva» |
+
+Saldo total al cierre de cada mes (plan sin la historia, ancla 2026-11-27, RD$): oct 2025 669,345 · nov 821,810 · dic 843,435 · ene 2026 803,035 · feb 477,455 · mar 654,365 · abr 610,545 · may 731,630 · jun 539,250 · jul 494,370 · ago 622,930 · sep 677,280 · oct 499,605 · nov 653,630.
 
 Primer arranque: si no hay espacios, P-01 muestra dos tarjetas grandes ("Empezar mi espacio" y "Ver con datos de ejemplo: Colmado / Despacho"). Los espacios demo llevan un distintivo "Ejemplo" y se archivan con un toque.
 

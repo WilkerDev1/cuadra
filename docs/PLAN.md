@@ -47,7 +47,7 @@ Los documentos de origen (inventario, especificación v2 y su análisis crítico
 | Login | Perfil local con contraseña y clave de recuperación (ver tabla de arriba) |
 - Móvil y escritorio como ciudadanos de primera; claro y oscuro; instalable como PWA.
 
-**Datos de ejemplo.** Un botón "Cargar datos de ejemplo" crea espacios ficticios con unos 14 meses de actividad creíble (un colmado, un cliente de despacho contable y unas finanzas personales), generados con semilla fija para que la demo sea siempre igual. Deben ejercitar **todas** las funciones, no solo llenar listas:
+**Datos de ejemplo.** Un botón "Cargar datos de ejemplo" crea espacios ficticios con unos 14 meses de actividad creíble (un colmado, un cliente de despacho contable, unas finanzas personales y una iglesia), generados con semilla fija para que la demo sea siempre igual. Deben ejercitar **todas** las funciones, no solo llenar listas:
 
 - Cuentas en positivo, una en negativo con su aviso, y una archivada.
 - Entradas, salidas, transferencias y saldos iniciales; lotes de captura con total de control (uno con descuadre anotado); un lote importado desde Excel.

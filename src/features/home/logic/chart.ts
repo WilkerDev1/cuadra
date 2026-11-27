@@ -24,6 +24,8 @@ export interface FlowMonth {
   inMinor: Minor;
   outMinor: Minor;
   netMinor: Minor;
+  /** Fracción del cubo que cubre el periodo (semana parcial: 4/7); la barra se estrecha en proporción. */
+  weight?: number;
 }
 
 /** Paso «bonito» (1, 2, 2.5 o 5 por potencia de 10) para que `span` quepa en `maxSteps` divisiones como mucho. */
@@ -50,18 +52,18 @@ export interface FlowGeometry {
   top: number;
   bottom: number;
   ticks: Tick[];
-  bars: Array<{ key: string; x: number; cx: number; yIn: number; hIn: number; yOut: number; hOut: number; yNet: number }>;
+  bars: Array<{ key: string; x: number; w: number; cx: number; yIn: number; hIn: number; yOut: number; hOut: number; yNet: number }>;
 }
 
 /**
- * Barras espejadas por mes: entradas hacia arriba y salidas hacia abajo desde el eje, con el neto como punto
+ * Barras espejadas por cubo (día, semana o mes): entradas hacia arriba y salidas hacia abajo desde el eje, con el neto como punto
  * sobre la misma escala. El eje no va al centro: arriba cabe la mayor entrada y abajo la mayor salida, redondeadas
  * a un paso bonito, así las barras usan toda la altura sin dejar de ser comparables. `pad` reserva los bordes.
  */
-export function flowGeometry(months: readonly FlowMonth[], width: number, height: number, pad = 6, maxSteps = 5): FlowGeometry {
+export function flowGeometry(months: readonly FlowMonth[], width: number, height: number, pad = 6, maxSteps = 5, barRatio = 0.46): FlowGeometry {
   const n = Math.max(1, months.length);
   const slot = width / n;
-  const barW = Math.max(4, Math.min(40, slot * 0.46));
+  const barW = Math.max(Math.min(4, slot * 0.8), Math.min(40, slot * barRatio));
   const maxIn = Math.max(0, ...months.map((m) => m.inMinor));
   const maxOut = Math.max(0, ...months.map((m) => m.outMinor));
   const step = niceStep(Math.max(1, maxIn + maxOut), maxSteps);
@@ -71,7 +73,8 @@ export function flowGeometry(months: readonly FlowMonth[], width: number, height
   const mid = r2(pad + top * scale);
   const y = (v: number) => v * scale;
   const ticks: Tick[] = [];
-  for (let v = -bottom; v <= top; v += step) ticks.push({ value: v, y: r2(mid - y(v)) });
+  if (maxIn === 0 && maxOut === 0) ticks.push({ value: 0, y: mid });
+  else for (let v = -bottom; v <= top; v += step) ticks.push({ value: v, y: r2(mid - y(v)) });
   return {
     slot,
     barW,
@@ -80,11 +83,12 @@ export function flowGeometry(months: readonly FlowMonth[], width: number, height
     bottom,
     ticks,
     bars: months.map((m, i) => {
-      const x = i * slot + (slot - barW) / 2;
+      const w = Math.max(Math.min(barW, 3), barW * Math.min(1, Math.max(0, m.weight ?? 1)));
+      const x = i * slot + (slot - w) / 2;
       const hIn = y(m.inMinor);
       const hOut = y(m.outMinor);
       const net = Math.max(-bottom, Math.min(top, m.netMinor));
-      return { key: m.key, x: r2(x), cx: r2(i * slot + slot / 2), yIn: r2(mid - hIn), hIn: r2(hIn), yOut: mid, hOut: r2(hOut), yNet: r2(mid - y(net)) };
+      return { key: m.key, x: r2(x), w: r2(w), cx: r2(i * slot + slot / 2), yIn: r2(mid - hIn), hIn: r2(hIn), yOut: mid, hOut: r2(hOut), yNet: r2(mid - y(net)) };
     }),
   };
 }
@@ -95,6 +99,8 @@ export function niceDomain(values: readonly number[], maxSteps = 4): { lo: numbe
   const min = Math.min(...values);
   const max = Math.max(...values);
   const step = niceStep(Math.max(1, max - min), maxSteps);
+  // Serie plana: una sola división en su valor y la línea al medio.
+  if (min === max) return { lo: min - step, hi: max + step, step, values: [min] };
   let lo = Math.floor(min / step) * step;
   let hi = Math.ceil(max / step) * step;
   if (lo === hi) {
@@ -136,9 +142,32 @@ export interface AreaGeometry {
   zeroY: number | null;
   /** y de un valor cualquiera en la misma escala (divisiones del eje). */
   yOf: (v: number) => number;
+  /** x de la posición `i` (de `slots`). */
+  xOf: (i: number) => number;
 }
 
-/** Línea y área de una serie de saldos en una caja w×h, con margen vertical. */
+/**
+ * Posiciones de la línea de saldo por cubos: la 0 (apertura) en el borde izquierdo y la `p` (cierre del cubo
+ * `p − 1`) al centro de su cubo, justo bajo su rótulo del eje. `n` es el número de cubos.
+ */
+export function centeredX(n: number, width: number): (p: number) => number {
+  const slot = width / Math.max(1, n);
+  return (p) => (p <= 0 ? 0 : r2((p - 0.5) * slot));
+}
+
+/** Posición más cercana a `x` entre las `count` primeras de `xOf` (no tienen por qué estar repartidas por igual). */
+export function nearestOf(x: number, count: number, xOf: (p: number) => number): number {
+  let best = 0;
+  for (let p = 1; p < count; p++) if (Math.abs(xOf(p) - x) < Math.abs(xOf(best) - x)) best = p;
+  return best;
+}
+
+/**
+ * Línea y área de una serie de saldos en una caja w×h, con margen vertical. `slots` (≥ valores) reparte el ancho
+ * entre más posiciones que valores: la línea se detiene donde acaban los datos y el resto queda vacío. `xAt`
+ * sustituye el reparto uniforme (p. ej. `centeredX`). El área se cierra en el cero si cae dentro del dibujo
+ * (si no, en el borde más cercano), así un saldo negativo o plano en cero no se pinta como saldo positivo.
+ */
 export function areaGeometry(
   values: readonly Minor[],
   width: number,
@@ -146,8 +175,13 @@ export function areaGeometry(
   padTop = 8,
   padBottom = 4,
   domain?: { lo: number; hi: number },
+  slots = values.length,
+  xAt?: (i: number) => number,
 ): AreaGeometry {
-  if (values.length === 0) return { line: '', area: '', points: [], min: 0, max: 0, zeroY: null, yOf: () => height };
+  const n = Math.max(slots, values.length);
+  const step = n > 1 ? width / (n - 1) : 0;
+  const xOf = xAt ?? ((i: number) => r2(i * step));
+  if (values.length === 0) return { line: '', area: '', points: [], min: 0, max: 0, zeroY: null, yOf: () => height, xOf };
   let min = domain?.lo ?? Math.min(...values);
   let max = domain?.hi ?? Math.max(...values);
   if (min === max) {
@@ -156,14 +190,14 @@ export function areaGeometry(
   }
   const span = max - min;
   const inner = height - padTop - padBottom;
-  const step = values.length > 1 ? width / (values.length - 1) : 0;
   const yOf = (v: number) => r2(padTop + (1 - (v - min) / span) * inner);
-  const points = values.map((v, i) => ({ x: r2(i * step), y: yOf(v) }));
+  const points = values.map((v, i) => ({ x: xOf(i), y: yOf(v) }));
   const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x} ${p.y}`).join('');
   const last = points[points.length - 1] ?? { x: 0, y: 0 };
-  const area = `${line}L${last.x} ${height}L0 ${height}Z`;
+  const base = Math.min(height, Math.max(0, yOf(0)));
+  const area = `${line}L${last.x} ${base}L${points[0]?.x ?? 0} ${base}Z`;
   const zeroY = min < 0 && max > 0 ? yOf(0) : null;
-  return { line, area, points, min, max, zeroY, yOf };
+  return { line, area, points, min, max, zeroY, yOf, xOf };
 }
 
 /** Índice del punto más cercano a `x` en una serie de `n` puntos repartidos en `width`. */

@@ -24,7 +24,7 @@ for (const size of sizes) for (const scheme of schemes) {
     return { tx, acc, field, batch };
   }, ws).catch((e) => ({ err: String(e) }));
   const routes = ['/', '/bienvenida', '/respaldo', '/ajustes', '/plantillas', '/seguridad'];
-  for (const w of [ws, ids.despacho, ids.personal, empty].filter(Boolean)) {
+  for (const w of [ws, ids.despacho, ids.personal, ids.iglesia, empty].filter(Boolean)) {
     for (const r of ['', 'movimientos', 'cuentas', 'resumen', 'informes', 'informes/resumido', 'informes/detallado', 'captura', 'historial', 'lotes', 'ajustes', 'ajustes/espacio', 'ajustes/cuentas', 'ajustes/campos', 'ajustes/vistas', 'ajustes/plantilla', 'importar', 'nuevo?tipo=salida', 'transferencia']) {
       if (w !== ws && /informes\/|ajustes\/|importar|nuevo|transferencia|captura/.test(r)) continue;
       routes.push(`/e/${w}/${r}`);

@@ -6,8 +6,8 @@ import { addDays, compareIsoDate, fromIsoDate, toIsoDate } from '../dates';
 import type { AccountType, AppliesTo, FieldRole, FieldType, IsoDate, Minor } from '../types';
 import { fnv1a } from './prng';
 
-export type DemoProfileId = 'colmado' | 'despacho' | 'personal';
-export type DemoTemplateId = 'negocio' | 'despacho' | 'personal';
+export type DemoProfileId = 'colmado' | 'despacho' | 'personal' | 'iglesia';
+export type DemoTemplateId = 'negocio' | 'despacho' | 'personal' | 'organizacion';
 
 /** Valor por clave de campo: lista → clave de opción; texto → texto; fecha → IsoDate; número; sí/no. */
 export type DemoValue = string | number | boolean;
@@ -133,8 +133,8 @@ export interface DemoPlan {
   openings: Record<string, DemoOpening>;
   extraAccounts: DemoExtraAccount[];
   extraFields: DemoExtraField[];
-  /** Opciones nuevas de campos de lista de la plantilla (contactos, comercios…). */
-  extraOptions: Record<string /* field key */, Array<{ key: string; label: string }>>;
+  /** Opciones nuevas de campos de lista de la plantilla (contactos, comercios…); `appliesTo` si solo vale para entradas o salidas. */
+  extraOptions: Record<string /* field key */, Array<{ key: string; label: string; appliesTo?: AppliesTo }>>;
   /** Ordenados por fecha (orden estable). */
   items: DemoItem[];
   /** Ordenados por `at`. */

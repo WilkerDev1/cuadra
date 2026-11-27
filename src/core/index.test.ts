@@ -58,7 +58,7 @@ describe('createCuadra y createTestCuadra', () => {
     expect(await c.workspaces.list()).toEqual([]);
     expect(await c.settings.get('theme')).toBe('system');
     expect((await c.templates.list()).length).toBeGreaterThan(0);
-    expect(c.demo.profiles().map((p) => p.id)).toEqual(['colmado', 'despacho', 'personal']);
+    expect(c.demo.profiles().map((p) => p.id)).toEqual(['colmado', 'despacho', 'personal', 'iglesia']);
     expect(await c.auth.status()).toMatchObject({ enabled: false, locked: false });
     expect(c.importCsv.parse('Fecha,Monto\n2026-06-01,10').headers).toEqual(['Fecha', 'Monto']);
     expect((await c.backup.inspect('{}')).ok).toBe(false);
@@ -90,7 +90,7 @@ describe('constantes públicas para la interfaz', () => {
     expect(core.AUTH_AUTO_LOCK_CHOICES).toContain(core.AUTH_DEFAULT_AUTO_LOCK_MINUTES);
     for (const m of core.AUTH_AUTO_LOCK_CHOICES) expect(m).toBeLessThanOrEqual(core.AUTH_MAX_AUTO_LOCK_MINUTES);
     expect([core.MAX_DESCRIPTION_LENGTH, core.MAX_NOTES_LENGTH, core.MAX_LABEL_LENGTH]).toEqual([200, 2_000, 80]);
-    expect(core.DEMO_PROFILES.map((p) => p.id)).toEqual(['colmado', 'despacho', 'personal']);
+    expect(core.DEMO_PROFILES.map((p) => p.id)).toEqual(['colmado', 'despacho', 'personal', 'iglesia']);
     expect(core.DEMO_MONTHS).toBe(14);
     expect(typeof core.DEMO_SEED).toBe('number');
   });

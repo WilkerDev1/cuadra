@@ -53,10 +53,15 @@ test('panel: clic en una barra abre sus movimientos con el mismo total', async (
   expect(colmado).not.toBe(''); // el fixture deja la página en el Inicio del colmado
   const chart = page.locator('svg.home-flow__svg');
   await expect(chart).toBeVisible();
-  // El penúltimo mes: un mes completo del ejemplo.
+  // En modo Mes la gráfica va día a día: como mucho una barra por día del mes, hasta hoy.
   const bars = page.locator('.home-flow__m');
+  await expect.poll(() => bars.count()).toBeGreaterThan(0);
+  expect(await bars.count()).toBeLessThanOrEqual(31);
+  // En 12 meses, una barra por mes; el penúltimo es un mes completo del ejemplo.
+  await page.getByRole('radiogroup', { name: 'Periodo' }).getByRole('radio', { name: '12 meses' }).click();
+  await expect(page.getByRole('heading', { level: 2, name: /^Entradas y salidas · \S+ \d{4} – / })).toBeVisible();
+  await expect.poll(() => bars.count()).toBe(12);
   const n = await bars.count();
-  expect(n).toBeGreaterThan(2);
   const box = await bars.nth(n - 2).locator('.home-flow__in').boundingBox();
   if (box === null) throw new Error('sin barra');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../../../core';
-import { areaGeometry, changeRatio, dayNet, flowGeometry, groupByDay, monthTicks, nearestIndex, niceDomain, niceStep, seriesKeyMonth, seriesPointEnd, slotIndex, stepIndex, tail, tipSide } from './chart';
+import { areaGeometry, centeredX, nearestOf, changeRatio, dayNet, flowGeometry, groupByDay, monthTicks, nearestIndex, niceDomain, niceStep, seriesKeyMonth, seriesPointEnd, slotIndex, stepIndex, tail, tipSide } from './chart';
 import { findPossibleDuplicates, similarDescriptions } from './duplicates';
 import { normalizeFilter, readLedgerSearch } from '../../../app/data/txFilterUrl';
 import { movementsHref } from './links';
@@ -12,6 +12,10 @@ describe('flowGeometry sin movimientos', () => {
   it('da divisiones enteras (las formatea Money)', () => {
     const geo = flowGeometry([{ key: '2026-11', inMinor: 0, outMinor: 0, netMinor: 0 }], 300, 120);
     expect(geo.ticks.every((t) => Number.isSafeInteger(t.value))).toBe(true);
+  });
+  it('solo marca el cero (sin «+RD$0» ni «−RD$0» de un céntimo)', () => {
+    const geo = flowGeometry([{ key: '2026-11', inMinor: 0, outMinor: 0, netMinor: 0 }], 300, 120);
+    expect(geo.ticks.map((t) => t.value)).toEqual([0]);
   });
 });
 
@@ -187,9 +191,17 @@ describe('geometría', () => {
     expect(niceDomain([11_770_000, 43_050_000]).values).toEqual([10_000_000, 20_000_000, 30_000_000, 40_000_000, 50_000_000]);
     expect(niceDomain([-500, 1500]).values).toEqual([-500, 0, 500, 1000, 1500]);
     expect(niceDomain([700, 700]).lo).toBeLessThan(700);
+    // Saldo plano (un periodo sin movimientos): una sola división, en su valor; nada de «RD$0, RD$0, −RD$0».
+    expect(niceDomain([0, 0, 0]).values).toEqual([0]);
+    expect(niceDomain([25_000, 25_000]).values).toEqual([25_000]);
     const a = areaGeometry([0, 50], 100, 100, 0, 0, { lo: 0, hi: 100 });
     expect(a.points[1]).toEqual({ x: 100, y: 50 });
     expect(a.yOf(100)).toBe(0);
+    // Con más posiciones que valores (días que aún no llegan), la línea se detiene donde acaban los datos.
+    const part = areaGeometry([0, 50], 100, 100, 0, 0, { lo: 0, hi: 100 }, 5);
+    expect(part.points).toEqual([{ x: 0, y: 100 }, { x: 25, y: 50 }]);
+    expect(part.area).toBe('M0 100L25 50L25 100L0 100Z');
+    expect(part.xOf(4)).toBe(100);
   });
   it('fin del punto de la serie y lado de la ficha', () => {
     expect(seriesPointEnd('2025-12-01', 'week')).toBe('2025-12-07');
@@ -205,9 +217,44 @@ describe('geometría', () => {
       { x: 100, y: 0 },
     ]);
     expect(a.zeroY).toBe(50);
-    expect(a.area.endsWith('L100 100L0 100Z')).toBe(true);
+    // El área se cierra en el cero (no en el fondo): lo negativo no se pinta como si fuera saldo.
+    expect(a.area.endsWith('L100 50L0 50Z')).toBe(true);
+    // Saldo plano en cero (mes vacío): el área no tiene alto; con todo positivo y el cero debajo, cierra en el fondo.
+    const flat = areaGeometry([0, 0], 100, 100, 0, 0, niceDomain([0, 0]));
+    expect(flat.area).toBe(`${flat.line}L100 50L0 50Z`);
+    expect(areaGeometry([50, 80], 100, 100, 0, 0, { lo: 40, hi: 100 }).area.endsWith('L100 100L0 100Z')).toBe(true);
     expect(areaGeometry([], 10, 10).line).toBe('');
     expect(areaGeometry([5, 5], 10, 10, 0, 0).points[0]?.y).toBe(5);
+  });
+  it('saldo por cubos: la apertura en el borde y cada cierre al centro de su cubo (bajo su rótulo)', () => {
+    const x = centeredX(4, 400);
+    expect([0, 1, 2, 3, 4].map(x)).toEqual([0, 50, 150, 250, 350]);
+    const a = areaGeometry([10, 20, 30], 400, 100, 0, 0, { lo: 0, hi: 100 }, 5, x);
+    expect(a.points.map((p) => p.x)).toEqual([0, 50, 150]);
+    expect(a.area.endsWith('L150 100L0 100Z')).toBe(true);
+    // El cursor sobre el centro de un cubo elige ese cubo, sin ambigüedad.
+    expect(nearestOf(150, 5, x)).toBe(2);
+    expect(nearestOf(199, 5, x)).toBe(2);
+    expect(nearestOf(10, 5, x)).toBe(0);
+    expect(nearestOf(30, 5, x)).toBe(1);
+    expect(nearestOf(999, 3, x)).toBe(2);
+  });
+  it('semanas parciales: barra más estrecha según sus días', () => {
+    const g = flowGeometry(
+      [
+        { key: 'a', inMinor: 100, outMinor: 0, netMinor: 100, weight: 4 / 7 },
+        { key: 'b', inMinor: 100, outMinor: 0, netMinor: 100 },
+      ],
+      200,
+      100,
+      0,
+      5,
+      0.5,
+    );
+    expect(g.bars[1]!.w).toBe(g.barW);
+    expect(g.bars[0]!.w).toBeCloseTo((g.barW * 4) / 7, 1);
+    // Sigue centrada en su ranura.
+    expect(g.bars[0]!.x + g.bars[0]!.w / 2).toBeCloseTo(g.bars[0]!.cx, 1);
   });
   it('punteros y teclado', () => {
     expect(nearestIndex(49, 100, 3)).toBe(1);

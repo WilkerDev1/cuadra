@@ -1,4 +1,4 @@
-// Inicio móvil (DESIGN §10.3): saldo a sangre con su línea de 30 días, el mes en dos cifras pulsables, lo que pide
+// Inicio móvil (DESIGN §10.3): saldo a sangre con su línea del mes en curso (desde la apertura hasta hoy), el mes en dos cifras pulsables, lo que pide
 // atención, las cuentas en una tira deslizable y los últimos movimientos por día.
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router';
@@ -35,7 +35,10 @@ export function Mobile() {
   const prev = d.previousPeriod;
   const period = { preset: 'this_month' as const };
   const days = groupByDay(d.recent);
-  const trend = tail(d.series.totalMinor, 30);
+  // La pantalla habla del mes en curso: la línea va de la apertura del mes al cierre de hoy (la serie diaria puede
+  // seguir con días posteriores si hay movimientos programados; aquí no se dibujan).
+  const trend = [d.dailyOpeningMinor, ...d.daily.filter((x) => x.date <= d.today).map((x) => x.balanceMinor)];
+  const monthName = d.period.label.replace(/ \d{4}$/, '');
   const prevName = prev?.label.replace(/ \d{4}$/, '') ?? '';
   const byAccount = Object.fromEntries(Object.entries(d.series.byAccount).map(([id, v]) => [id, tail(v, 30)]));
 
@@ -45,7 +48,7 @@ export function Mobile() {
       <section className="home-mslab" aria-label={t('home.balance.label')}>
         <p className="home-slab__label">{t('home.balance.label')}</p>
         <AmountText minor={d.balance.totalMinor} size="hero" highlight animate onForest currency={d.currency} />
-        {trend.length > 1 ? <HeroSpark values={trend} label={t('home.balance.trend')} /> : null}
+        {trend.length > 1 ? <HeroSpark values={trend} label={t('home.balance.trend', { period: monthName })} /> : null}
         <p className="home-mslab__meta">
           {t('home.balance.accounts', { n: d.accounts.length, date: formatDate(d.today).replace(/ \d{4}$/, '') })}
         </p>
@@ -97,7 +100,7 @@ export function Mobile() {
   );
 }
 
-/** Línea de 30 días a todo el ancho de la tarjeta (se mide al montarse, ya con datos). */
+/** Línea del mes a todo el ancho de la tarjeta (se mide al montarse, ya con datos). */
 function HeroSpark({ values, label }: { values: readonly number[]; label: string }) {
   const [ref, width] = useWidth<HTMLDivElement>(320);
   return (

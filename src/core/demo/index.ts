@@ -4,6 +4,7 @@ import { isIsoDate } from '../dates';
 import { DomainError } from '../errors';
 import { planColmado } from './colmado';
 import { planDespacho } from './despacho';
+import { planIglesia } from './iglesia';
 import { planPersonal } from './personal';
 import { DEMO_MONTHS, DEMO_SEED, type DemoPlan, type DemoProfileId, type PlanOptions } from './plan';
 
@@ -36,6 +37,12 @@ export const DEMO_PROFILES: readonly DemoProfile[] = Object.freeze([
     description: 'Finanzas personales: salario quincenal, gastos por categoría, ahorro por transferencias, tarjeta de crédito y un viaje anotado de una vez.',
     templateId: 'personal',
   },
+  {
+    id: 'iglesia',
+    name: 'Iglesia Camino de Luz',
+    description: 'Una iglesia mediana sin fines de lucro: conteo de diezmos y ofrendas en lote en cada culto, fondo de construcción, misiones, ayudas sociales, actividades del año y un estado del banco importado desde Excel.',
+    templateId: 'organizacion',
+  },
 ]);
 
 export const isDemoProfileId = (x: unknown): x is DemoProfileId => DEMO_PROFILES.some((p) => p.id === x);
@@ -54,5 +61,7 @@ export function planDemo(profile: DemoProfileId, opts: Partial<PlanOptions> & { 
       return planDespacho(full);
     case 'personal':
       return planPersonal(full);
+    case 'iglesia':
+      return planIglesia(full);
   }
 }

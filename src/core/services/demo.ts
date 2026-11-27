@@ -68,7 +68,7 @@ export interface DemoProgress {
   /** Unidades hechas y totales de ESTE perfil (movimientos + pasos de historia + vistas). */
   done: number;
   total: number;
-  /** 0–1 de toda la carga (en seedAll, los tres perfiles; en seed, el perfil). Nunca baja. */
+  /** 0–1 de toda la carga (en seedAll, los cuatro perfiles; en seed, el perfil). Nunca baja. */
   fraction: number;
 }
 
@@ -85,7 +85,7 @@ export interface DemoService {
   plan(profile: DemoProfileId, opts?: { seed?: number; months?: number; anchor?: IsoDate }): DemoPlan;
   /** Crea un espacio nuevo is_demo=1 con ~14 meses que terminan en clock.today(). */
   seed(profile: DemoProfileId, opts?: DemoSeedOptions): Promise<Mutation<DemoSeedResult>>;
-  /** Los tres perfiles, en orden (colmado, despacho, personal). Si uno falla no queda ninguno. */
+  /** Los cuatro perfiles, en orden (colmado, despacho, personal, iglesia). Si uno falla no queda ninguno. */
   seedAll(opts?: DemoSeedOptions): Promise<Array<Mutation<DemoSeedResult>>>;
 }
 
@@ -318,7 +318,10 @@ export function createDemoService(deps: CoreDeps): DemoService {
       }
       for (const [fieldKey, opts] of Object.entries(p.extraOptions)) {
         const fieldId = lookup(keys.fields, fieldKey, 'field');
-        for (const o of opts) keys.options[`${fieldKey}.${o.key}`] = (await fields.addOption(fieldId, { label: o.label })).value.id;
+        for (const o of opts) {
+          const created = await fields.addOption(fieldId, { label: o.label, ...(o.appliesTo === undefined ? {} : { appliesTo: o.appliesTo }) });
+          keys.options[`${fieldKey}.${o.key}`] = created.value.id;
+        }
       }
       for (const f of await fields.list(workspaceId, { includeInactive: true })) keys.types[f.key] = f.type;
       const optionOf = (fieldKey: string, optionKey: string): Id => lookup(keys.options, `${fieldKey}.${optionKey}`, 'option');

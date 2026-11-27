@@ -734,7 +734,7 @@ describe('queries: inicio y panel', () => {
   it('dashboard: serie diaria del periodo (entradas, salidas y saldo al cierre) y posibles duplicados', async () => {
     const { q, ws, fx, caja, banco } = await seedBase();
     const d = await q.dashboard(ws, { period: { preset: 'this_month' } });
-    // Junio de 2026 hasta hoy (15): un punto por día, sin futuro.
+    // Junio de 2026 hasta hoy (15): un punto por día; sin movimientos con fecha futura, la serie no pasa de hoy.
     expect(d.daily.map((x) => x.date)).toEqual(Array.from({ length: 15 }, (_, i) => `2026-06-${String(i + 1).padStart(2, '0')}`));
     expect(d.daily.reduce((s, x) => s + x.inMinor, 0)).toBe(d.period.totals.inMinor);
     expect(d.daily.reduce((s, x) => s + x.outMinor, 0)).toBe(d.period.totals.outMinor);
@@ -746,6 +746,23 @@ describe('queries: inicio y panel', () => {
     const may = await q.dashboard(ws, { period: { from: '2026-05-01', to: '2026-05-31' } });
     expect(may.daily).toHaveLength(31);
     expect(may.daily.at(-1)?.balanceMinor).toBe(before.totalMinor);
+    // Punto de partida de la línea (saldo al cierre del día anterior) y movimientos por día.
+    const endApril = await q.balances(ws, { asOf: '2026-04-30' });
+    expect(d.dailyOpeningMinor).toBe(before.totalMinor);
+    expect(may.dailyOpeningMinor).toBe(endApril.totalMinor);
+    const juneCount = await q.totals(ws, { period: { preset: 'this_month' }, kinds: ['income', 'expense'] });
+    expect(d.daily.reduce((s, x) => s + x.count, 0)).toBe(juneCount.count);
+    expect(d.daily[0]!.count).toBe(0); // el único movimiento del 1 de junio está anulado
+    // Periodo anterior equivalente (mayo) día a día, para la línea de comparación: termina donde empieza junio.
+    expect(d.previousDaily?.openingMinor).toBe(endApril.totalMinor);
+    expect(d.previousDaily?.balances).toHaveLength(31);
+    expect(d.previousDaily?.balances[0]?.date).toBe('2026-05-01');
+    expect(d.previousDaily?.balances.at(-1)).toEqual({ date: '2026-05-31', balanceMinor: before.totalMinor });
+    expect(d.previousDaily?.balances.find((b) => b.date === '2026-05-20')?.balanceMinor).toBe(
+      (await q.balances(ws, { asOf: '2026-05-20' })).totalMinor,
+    );
+    // Sin periodo anterior (todo el historial) no hay comparación.
+    expect((await q.dashboard(ws, { period: { preset: 'all' } })).previousDaily).toBeNull();
 
     expect(d.attention.possibleDuplicates).toEqual({ count: 0, days: 90, items: [] });
     const a = await fx.expense(banco, 4321, '2026-06-10', 'Compra de mercancía');
@@ -757,6 +774,35 @@ describe('queries: inicio y panel', () => {
     const dup = (await q.dashboard(ws)).attention.possibleDuplicates;
     expect(dup.count).toBe(1);
     expect(dup.items).toEqual([{ transactionId: b, duplicateOfId: a }]);
+  });
+
+  it('dashboard: los movimientos con fecha posterior a hoy entran en la serie diaria de su periodo', async () => {
+    const { q, ws, fx, caja } = await seedBase();
+    // Hoy es 15 jun 2026: una entrada el 20 jun (este mes) y una salida el 5 jul (fuera del mes, dentro del año).
+    await fx.income(caja, 50000, '2026-06-20', 'Cobro programado');
+    await fx.expense(caja, 30000, '2026-07-05', 'Pago de julio');
+    const sum = (d: { daily: Array<{ inMinor: number; outMinor: number }> }, k: 'inMinor' | 'outMinor') => d.daily.reduce((s, x) => s + x[k], 0);
+
+    const month = await q.dashboard(ws, { period: { preset: 'this_month' } });
+    // La serie llega hasta el último movimiento del periodo (no se corta en hoy) y suma lo mismo que la pizarra.
+    expect(month.daily.at(-1)?.date).toBe('2026-06-30');
+    expect(sum(month, 'inMinor')).toBe(month.period.totals.inMinor);
+    expect(sum(month, 'outMinor')).toBe(month.period.totals.outMinor);
+    expect(month.daily.find((x) => x.date === '2026-06-20')).toMatchObject({ inMinor: 50000, count: 1 });
+    // El saldo al cierre de hoy no cuenta lo programado; el del último día, sí (salvo lo que cae después del periodo).
+    const today = month.daily.find((x) => x.date === '2026-06-15')!;
+    expect(today.balanceMinor).toBe(month.balance.totalMinor - 50000 + 30000);
+    expect(month.daily.at(-1)?.balanceMinor).toBe(month.balance.totalMinor + 30000);
+
+    const year = await q.dashboard(ws, { period: { preset: 'this_year' } });
+    expect(year.daily.at(-1)?.date).toBe('2026-07-05'); // el último programado, no el fin del año
+    expect(sum(year, 'inMinor')).toBe(year.period.totals.inMinor);
+    expect(sum(year, 'outMinor')).toBe(year.period.totals.outMinor);
+    expect(year.daily.at(-1)?.balanceMinor).toBe(year.balance.totalMinor);
+
+    // Todo el historial: hasta el último movimiento, aunque sea futuro.
+    const all = await q.dashboard(ws, { period: { preset: 'all' } });
+    expect(all.daily.at(-1)?.date).toBe('2026-07-05');
   });
 
   it('dashboard de un espacio vacío no falla', async () => {
@@ -771,6 +817,8 @@ describe('queries: inicio y panel', () => {
     expect(d.series.keys).toHaveLength(d.series.totalMinor.length);
     expect(d.attention.backup.overdue).toBe(false);
     expect(d.daily).toEqual([]);
+    expect(d.dailyOpeningMinor).toBe(0);
+    expect(d.previousDaily).toBeNull();
     expect(d.attention.possibleDuplicates.count).toBe(0);
   });
 });

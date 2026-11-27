@@ -1,5 +1,5 @@
 // Datos de ejemplo (ARCHITECTURE.md 6, pruebas 104–105 y cobertura de PLAN.md "Datos de ejemplo").
-// Los tres espacios se cargan una vez con seedAll (sólo servicios públicos) y cada punto que pide PLAN.md se
+// Los cuatro espacios se cargan una vez con seedAll (sólo servicios públicos) y cada punto que pide PLAN.md se
 // afirma sobre la base resultante.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestCuadra, type TestCuadra } from '../../test/harness';
@@ -11,8 +11,8 @@ import { countPlanTransactions, DEMO_PROFILES, DEMO_SEED, hashPlan, planDemo, re
 import { percentOf, roundToUnit } from './prng';
 
 const ANCHOR = '2026-11-27';
-const PROFILES = ['colmado', 'despacho', 'personal'] as const;
-const NAMES = { colmado: 'Colmado La Esquina', despacho: 'Estudio Creativo Brisa, SRL', personal: 'Mis finanzas' } as const;
+const PROFILES = ['colmado', 'despacho', 'personal', 'iglesia'] as const;
+const NAMES = { colmado: 'Colmado La Esquina', despacho: 'Estudio Creativo Brisa, SRL', personal: 'Mis finanzas', iglesia: 'Iglesia Camino de Luz' } as const;
 
 const salesOf = (p: DemoPlan, month: string): number =>
   p.items.reduce(
@@ -60,7 +60,7 @@ const RD = 100;
 
 describe('plan de datos de ejemplo (puro)', () => {
   it('saldos creíbles: oscilan en cientos de miles, con meses de neto negativo, caída y recuperación', () => {
-    const bounds = { colmado: [80_000, 900_000], despacho: [150_000, 1_500_000], personal: [40_000, 350_000] } as const;
+    const bounds = { colmado: [80_000, 900_000], despacho: [150_000, 1_500_000], personal: [40_000, 350_000], iglesia: [150_000, 1_200_000] } as const;
     for (const profile of PROFILES) {
       const p = planDemo(profile, { anchor: ANCHOR });
       const ends = monthEnds(p);
@@ -106,6 +106,110 @@ describe('plan de datos de ejemplo (puro)', () => {
     expect(ahorros).toBeLessThan(p.openings['ahorros']!.amountMinor + 150_000 * RD);
     expect(p.items.filter((i) => i.t === 'transfer' && i.description === 'Pago de la tarjeta').length).toBeGreaterThanOrEqual(12);
     expect(finalBalance(p, 'tarjeta')).toBeLessThan(0);
+  });
+
+  it('iglesia: conteo de diezmos y ofrendas en lote cada domingo y miércoles, depósitos, fondo de construcción y misiones', () => {
+    const p = planDemo('iglesia', { anchor: ANCHOR });
+    expect(p.templateId).toBe('organizacion');
+    const captures = p.items.filter((i): i is Extract<typeof i, { t: 'capture' }> => i.t === 'capture');
+    const sundays = captures.filter((c) => c.label.startsWith('Conteo del culto dominical'));
+    const wednesdays = captures.filter((c) => c.label.startsWith('Conteo del culto de oración'));
+    // ~14 meses: un conteo por domingo y por miércoles (salvo algún culto suspendido).
+    expect(sundays.length).toBeGreaterThanOrEqual(55);
+    expect(wednesdays.length).toBeGreaterThanOrEqual(50);
+    for (const c of captures) {
+      expect(c.kind, c.label).toBe('income');
+      expect(c.controlTotalMinor, c.label).toBeGreaterThan(0);
+    }
+    // Cada conteo del domingo lleva diezmos y ofrendas; los diezmos son la parte grande.
+    for (const c of sundays) {
+      const cats = new Set(c.rows.map((r) => r.values['categoria']));
+      expect(cats.has('diezmos') && cats.has('ofrendas'), c.label).toBe(true);
+    }
+    // Tres conteos descuadrados aceptados, con la diferencia anotada en el rótulo.
+    const mismatched = captures.filter((c) => c.mismatchNote !== undefined);
+    expect(mismatched).toHaveLength(3);
+    for (const c of mismatched) {
+      expect(c.label.includes(c.mismatchNote ?? '∅'), c.label).toBe(true);
+      expect(c.controlTotalMinor).not.toBe(c.rows.reduce((a, r) => a + r.amountMinor, 0));
+    }
+    // Un conteo anotado dos veces que se anula entero.
+    expect(p.steps.filter((s) => s.t === 'void_batch')).toHaveLength(1);
+    const count = (pred: (i: (typeof p.items)[number]) => boolean) => p.items.filter(pred).length;
+    expect(count((i) => i.t === 'transfer' && i.from === 'caja' && i.to === 'banco')).toBeGreaterThan(80);
+    expect(count((i) => i.t === 'transfer' && i.to === 'fondo_construccion')).toBeGreaterThan(40);
+    expect(count((i) => i.t === 'tx' && i.account === 'fondo_construccion' && i.kind === 'expense' && i.values['categoria'] === 'construccion')).toBeGreaterThanOrEqual(3);
+    // Fijos de cada mes (los del mes importado del banco van dentro del lote importado).
+    const plain = p.items.flatMap((i) => (i.t === 'tx' ? [i.description] : i.t === 'import' ? i.rows.map((r) => r.description) : []));
+    for (const text of ['Sustento pastoral', 'Alquiler del local', 'Factura de electricidad', 'Envío mensual a la obra misionera', 'Salario del conserje']) {
+      expect(plain.filter((d) => d.startsWith(text)).length, text).toBeGreaterThanOrEqual(13);
+    }
+    expect(count((i) => i.t === 'tx' && i.values['categoria'] === 'ayuda_social')).toBeGreaterThanOrEqual(40);
+    // Actividades del año: retiro de Semana Santa, campamento, venta de comida, aniversario, Navidad.
+    const texts = p.items.map((i) => (i.t === 'capture' || i.t === 'import' ? `${i.label} ${i.rows.map((r) => r.description).join(' ')}` : i.description)).join('\n');
+    for (const word of ['retiro de Semana Santa', 'campamento de jóvenes', 'Venta de comida pro-templo', 'aniversario', 'Nochebuena', 'Canastas navideñas', 'escuela dominical', 'Santa Cena']) {
+      expect(texts, word).toContain(word);
+    }
+    // Dimensiones de una iglesia: ministerio, culto o actividad, fondo y forma de pago.
+    const used = new Set(p.items.flatMap((i) => (i.t === 'tx' || i.t === 'transfer' ? Object.keys(i.values ?? {}) : i.rows.flatMap((r) => Object.keys(r.values)))));
+    for (const k of ['categoria', 'fondo', 'ministerio', 'culto', 'metodo_pago', 'recibo', 'fecha_actividad', 'asistentes', 'conciliado', 'contacto']) expect(used.has(k), k).toBe(true);
+    expect(p.extraAccounts.map((a) => a.key)).toContain('fondo_construccion');
+  });
+
+  it('iglesia: estacionalidad (diciembre fuerte, enero flojo, Semana Santa y aniversario) y diezmos al alza tras la quincena', () => {
+    const p = planDemo('iglesia', { anchor: ANCHOR });
+    const giving = (month: string) =>
+      p.items.reduce(
+        (s, i) =>
+          i.t === 'capture' && i.date.startsWith(month)
+            ? s + i.rows.reduce((a, r) => a + (r.values['categoria'] === 'diezmos' || r.values['categoria'] === 'ofrendas' ? r.amountMinor : 0), 0)
+            : s,
+        0,
+      );
+    const months = ['2025-10', '2025-11', '2026-02', '2026-05', '2026-06', '2026-10'];
+    const typical = months.reduce((s, m) => s + giving(m), 0) / months.length;
+    expect(giving('2025-12')).toBeGreaterThan(typical * 1.15);
+    expect(giving('2026-01')).toBeLessThan(typical * 0.95);
+    // Domingo de Resurrección y culto de aniversario con más asistencia que un domingo típico.
+    const attendance = (c: DemoPlan['items'][number]) => (c.t === 'capture' ? Math.max(0, ...c.rows.map((r) => Number(r.values['asistentes'] ?? 0))) : 0);
+    const sundays = p.items.filter((i) => i.t === 'capture' && i.label.startsWith('Conteo del culto dominical'));
+    const avg = sundays.reduce((s, c) => s + attendance(c), 0) / sundays.length;
+    expect(attendance(sundays.find((c) => c.date === '2026-04-05')!)).toBeGreaterThan(avg * 1.2);
+    expect(sundays.some((c) => c.t === 'capture' && c.rows.some((r) => r.description.includes('aniversario')) && attendance(c) > avg * 1.2)).toBe(true);
+    // Los domingos justo después del cobro (15 y 30) se recogen más diezmos.
+    const tithe = (c: DemoPlan['items'][number]) => (c.t === 'capture' ? c.rows.reduce((a, r) => a + (r.values['categoria'] === 'diezmos' ? r.amountMinor : 0), 0) : 0);
+    const after = (d: string) => {
+      const dom = Number(d.slice(8, 10));
+      return (dom >= 15 && dom <= 18) || dom >= 30 || dom <= 3;
+    };
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    const plain = sundays.filter((c) => !['12', '01'].includes(c.date.slice(5, 7)));
+    expect(mean(plain.filter((c) => after(c.date)).map(tithe))).toBeGreaterThan(mean(plain.filter((c) => !after(c.date)).map(tithe)) * 1.1);
+  });
+
+  it('iglesia: la historia es coherente (ni salarios ni fijos anulados o con «descuento del proveedor»; cada motivo con su cuenta)', () => {
+    const p = planDemo('iglesia', { anchor: ANCHOR });
+    const byRef = new Map(p.items.flatMap((i) => (i.t === 'tx' && i.ref !== undefined ? [[i.ref, i] as const] : [])));
+    const fixed = ['salarios', 'alquiler', 'servicios_basicos', 'aportes', 'misiones', 'comisiones'];
+    for (const s of p.steps) {
+      if (!('ref' in s)) continue;
+      const it = byRef.get(s.ref);
+      if (it === undefined) continue; // lotes
+      const cat = String(it.values['categoria']);
+      const what = `${s.t} ${it.description} (${it.account})`;
+      if (s.t === 'void' && it.kind === 'expense') expect(fixed, what).not.toContain(cat);
+      if (s.t === 'void' && s.reason.includes('caja chica')) expect(it.account, what).toBe('caja');
+      if (s.t === 'void' && s.reason.includes('transferencia')) expect(it.account, what).toBe('banco');
+      if (s.t === 'edit' && s.patch.notes?.startsWith('Descuento del proveedor')) {
+        expect(it.values['contacto'], what).toBeDefined();
+        expect(fixed, what).not.toContain(cat);
+      }
+      if (s.t === 'edit' && s.patch.notes === 'Recibo entregado después') expect(it.values['recibo'], what).toBeUndefined();
+      if (s.t === 'edit' && s.patch.description !== undefined) expect(s.patch.description, what).not.toMatch(/\)\s*\(/);
+    }
+    expect(p.steps.filter((s) => s.t === 'void')).toHaveLength(5);
+    expect(p.steps.filter((s) => s.t === 'restore')).toHaveLength(1);
+    expect(p.steps.filter((s) => s.t === 'edit').length).toBeGreaterThanOrEqual(15);
   });
 
   it('la historia de cada movimiento empieza después de anotarlo (bloque semanal, lote o importación)', () => {
@@ -175,6 +279,9 @@ describe('plan de datos de ejemplo (puro)', () => {
     const total = plans.reduce((s, p) => s + countPlanTransactions(p), 0);
     expect(total).toBeGreaterThanOrEqual(6_000);
     expect(total).toBeLessThanOrEqual(9_000);
+    // La iglesia, un perfil mediano: entre el despacho y el colmado.
+    expect(countPlanTransactions(plans[3]!)).toBeGreaterThanOrEqual(1_000);
+    expect(countPlanTransactions(plans[3]!)).toBeLessThanOrEqual(2_200);
     const colmado = plans[0]!;
     const captures = colmado.items.filter((i) => i.t === 'capture');
     expect(captures.length).toBeGreaterThan(380);
@@ -292,12 +399,12 @@ describe('demo.seedAll', () => {
     await h.driver.close();
   });
 
-  it('tres espacios de ejemplo con 6 000–9 000 movimientos, en pocos segundos', async () => {
+  it('cuatro espacios de ejemplo con 6 000–9 000 movimientos, en pocos segundos', async () => {
     console.info(`[demo] seedAll en Node: ${Math.round(elapsedMs)} ms, ${results.map((r) => `${r.value.workspace.name}: ${r.value.transactions}`).join(' · ')}`);
     expect(elapsedMs).toBeLessThan(30_000);
     expect(results.map((r) => r.value.workspace.name)).toEqual(PROFILES.map((p) => NAMES[p]));
     expect(results.every((r) => r.value.workspace.isDemo)).toBe(true);
-    expect(results.map((r) => r.value.workspace.templateId)).toEqual(['negocio', 'despacho', 'personal']);
+    expect(results.map((r) => r.value.workspace.templateId)).toEqual(['negocio', 'despacho', 'personal', 'organizacion']);
     const n = await h.driver.get<{ n: number }>('SELECT COUNT(*) AS n FROM transactions');
     expect(Number(n?.n)).toBeGreaterThanOrEqual(6_000);
     expect(Number(n?.n)).toBeLessThanOrEqual(9_000);
@@ -314,15 +421,15 @@ describe('demo.seedAll', () => {
   it('progreso: fracción que nunca baja y termina en 1; UN evento de cambio por espacio', () => {
     expect(progress.length).toBeGreaterThan(100);
     for (let i = 1; i < progress.length; i += 1) expect(progress[i]!.fraction).toBeGreaterThanOrEqual(progress[i - 1]!.fraction);
-    expect(progress[progress.length - 1]).toMatchObject({ profile: 'personal', phase: 'done', fraction: 1 });
+    expect(progress[progress.length - 1]).toMatchObject({ profile: 'iglesia', phase: 'done', fraction: 1 });
     expect(new Set(progress.map((p) => p.phase))).toEqual(new Set(['structure', 'movements', 'history', 'done']));
     const seeds = events.filter((e) => e.reason === 'demo.seed');
     expect(seeds.map((e) => e.workspaceId)).toEqual(PROFILES.map((p) => ws[p]));
-    expect(events).toHaveLength(3);
+    expect(events).toHaveLength(4);
     expect(seeds[0]!.tables).toEqual(expect.arrayContaining(['transactions', 'batches', 'audit_log', 'saved_views', 'field_options']));
   });
 
-  it('invariantes I-1..I-9 en los tres espacios; solo las tarjetas en negativo', async () => {
+  it('invariantes I-1..I-9 en los cuatro espacios; solo las tarjetas en negativo', async () => {
     for (const profile of PROFILES) await checkInvariants(h, ws[profile]);
   });
 
@@ -432,8 +539,8 @@ describe('demo.seedAll', () => {
     expect(Number(created?.n)).toBe(captures.length);
   });
 
-  it('un lote IMPORTADO desde una hoja tipo Excel en el despacho (y otro en Mis finanzas), con su acción "import"', async () => {
-    for (const profile of ['despacho', 'personal'] as const) {
+  it('un lote IMPORTADO desde una hoja tipo Excel en el despacho (y otro en Mis finanzas y en la iglesia), con su acción "import"', async () => {
+    for (const profile of ['despacho', 'personal', 'iglesia'] as const) {
       const imports = await h.cuadra.batches.list(ws[profile], { source: 'import' });
       expect(imports, profile).toHaveLength(1);
       expect(imports[0]!.label).toMatch(/\.xlsx$/);
@@ -454,7 +561,7 @@ describe('demo.seedAll', () => {
   });
 
   it('campos de los cinco tipos con valores; ITBIS como dimensión del despacho; conciliado sí y no', async () => {
-    for (const profile of ['colmado', 'despacho'] as const) {
+    for (const profile of ['colmado', 'despacho', 'iglesia'] as const) {
       const types = await h.driver.all<{ type: string }>(
         `SELECT DISTINCT f.type FROM transaction_field_values v JOIN fields f ON f.id = v.field_id WHERE f.workspace_id = ? ORDER BY f.type`,
         [ws[profile]],
@@ -478,6 +585,38 @@ describe('demo.seedAll', () => {
       [ws.despacho, `${ANCHOR.slice(0, 7)}-01`],
     );
     expect(Number(thisMonth?.n)).toBe(0);
+  });
+
+  it('iglesia: conteos con total de control (tres descuadrados y uno anulado entero), saldo por fondo y gastos por ministerio', async () => {
+    const id = ws.iglesia;
+    const captures = await h.cuadra.batches.list(id, { source: 'capture', limit: 1000 });
+    expect(captures.length).toBeGreaterThan(110);
+    expect(captures.every((b) => b.controlTotalMinor !== null)).toBe(true);
+    const mismatched = captures.filter((b) => b.controlMismatchAccepted);
+    expect(mismatched).toHaveLength(3);
+    for (const b of mismatched) expect(b.label).toMatch(/\(diferencia de RD\$ [\d,]+ con el acta de conteo\)$/);
+    expect(captures.filter((b) => b.activeCount === 0 && b.voidedCount > 0)).toHaveLength(1);
+    // Cuentas: caja, banco, caja chica y la cuenta del fondo de construcción, ninguna en negativo.
+    const accounts = await h.cuadra.accounts.list(id, { includeArchived: true });
+    expect(accounts.map((a) => a.name).sort()).toEqual(['Caja', 'Caja chica', 'Cuenta bancaria', 'Fondo de construcción'].sort());
+    for (const a of accounts) expect(a.balanceMinor, a.name).toBeGreaterThanOrEqual(0);
+    // Saldo por fondo: entra y sale dinero en al menos cuatro fondos.
+    const fields = await h.cuadra.fields.list(id, { includeInactive: true });
+    const fondo = fields.find((f) => f.key === 'fondo')!;
+    const byFund = await h.cuadra.queries.summarize(id, { filter: { period: { preset: 'last_12_months' } }, groupBy: { by: 'field', fieldId: fondo.id } });
+    expect(byFund.groups.filter((g) => g.inMinor > 0 || g.outMinor > 0).length).toBeGreaterThanOrEqual(4);
+    // Gastos repartidos por ministerio (dimensión propia del perfil, con papel de centro de costo).
+    const ministerio = fields.find((f) => f.key === 'ministerio')!;
+    expect(ministerio.role).toBe('cost_center');
+    const byMinistry = await h.cuadra.queries.summarize(id, { filter: { kinds: ['expense'] }, groupBy: { by: 'field', fieldId: ministerio.id } });
+    expect(byMinistry.groups.filter((g) => g.outMinor > 0).length).toBeGreaterThanOrEqual(6);
+    // El duplicado «Ministerio juvenil» se fusionó con «Jóvenes».
+    const dup = ministerio.options.find((o) => o.label === 'Ministerio juvenil')!;
+    expect(dup.active).toBe(false);
+    expect(dup.mergedIntoId).toBe(ministerio.options.find((o) => o.label === 'Jóvenes')!.id);
+    // El aviso de respaldo vencido es lo único que pide atención (ninguna cuenta en negativo).
+    const dash = await h.cuadra.queries.dashboard(id);
+    expect(dash.attention.negativeAccounts).toEqual([]);
   });
 
   it('una opción renombrada, dos opciones fusionadas y un campo desactivado que conserva lo histórico', async () => {
@@ -605,6 +744,9 @@ describe('demo.seedAll', () => {
     expect(joined).toMatch(/RD\$|ITBIS|NCF|TSS|IR-17|colmado|quincena/i);
     const brands = /\b(Claro|Altice|Viva|Banreservas|Popular|BHD|Scotiabank|Edesur|Edenorte|Edeeste|Coca|Pepsi|Presidente|Brugal|Jumbo|Sirena|Nacional|Bravo|Netflix|Spotify|Adobe|Google|Facebook|Instagram|Meta|Uber|Shell|Texaco|Esso|Visa|Mastercard|Amazon|Microsoft|Apple)\b/;
     expect(joined.match(brands)).toBeNull();
+    // Ni denominaciones ni organizaciones religiosas reales: la iglesia es ficticia y genérica.
+    const churches = /\b(Asambleas? de Dios|Bautista|Adventista|Católica|Pentecostal|Metodista|Luterana|Presbiteriana|Anglicana|Episcopal|Evangélica Dominicana|Testigos de Jehová|Mormona?|Santos de los Últimos Días|Iglesia de Dios|Defensores de la Fe|Concilio|Arquidiócesis|Diócesis|Parroquia|Vaticano)\b/i;
+    expect(joined.match(churches)).toBeNull();
     expect(texts.every((x) => x.t.trim() !== '')).toBe(true);
   });
 

@@ -24,6 +24,7 @@
   font-weight: var(--w-strong);
   line-height: var(--lh-snug);
 }
+.home-h2__period { font-weight: var(--w-body); color: var(--ink-2); }
 .home-sec-head {
   display: flex;
   align-items: baseline;
@@ -78,6 +79,8 @@
 }
 .home-bar__period::first-letter { text-transform: uppercase; }
 .home-bar__today { margin-inline-start: var(--s-2); }
+/* Reservado: ocupa su sitio aunque no se vea, así la barra no cambia de alto al pulsar ←. */
+.home-bar__today.is-hidden { visibility: hidden; }
 
 /* ───────────────────────── Pizarra: saldo y su evolución ───────────────────────── */
 .home-slab {
@@ -156,6 +159,10 @@
   color: var(--on-forest-2);
   text-wrap: pretty;
 }
+/* Dos renglones reservados: «522 % más que dic 2024 – nov 2025» no hace crecer la pizarra al cambiar de modo. */
+@supports (min-block-size: 2lh) {
+  .home-kpi__cmp { min-block-size: 2lh; }
+}
 .home-kpi__info .ui-infotip__btn { color: var(--on-forest-2); }
 
 /* Gráfica de saldo sobre el bosque */
@@ -169,6 +176,22 @@
   min-block-size: var(--s-8);
 }
 .home-bal__when { font-size: var(--t-small); color: var(--on-forest-2); }
+.home-bal__key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-meta);
+  color: var(--on-forest-2);
+}
+.home-bal__key::first-letter { text-transform: uppercase; }
+.home-bal__keyline line, .home-bal__prev { stroke: var(--on-forest-2); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.home-bal__prev { fill: none; stroke-linejoin: round; opacity: .75; }
+/* Lo programado: la misma tinta que la línea, en puntos redondos (la comparación va en rayas y más tenue). */
+.home-bal__keyproj line, .home-bal__proj { stroke: var(--on-forest); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 0 4; }
+.home-bal__proj { fill: none; stroke-linejoin: round; }
+.home-bal__dot.is-scheduled { stroke-dasharray: 2 2; }
+.home-bal__prevdot { fill: var(--on-forest-2); }
+.home-bal__today { stroke: var(--on-forest-2); stroke-width: 1; stroke-dasharray: 1 3; opacity: .7; }
 .home-bal__plot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-3); min-inline-size: 0; }
 .home-bal__canvas { min-inline-size: 0; }
 .home-bal__svg {
@@ -178,7 +201,6 @@
   cursor: crosshair;
   border-radius: var(--r-1);
 }
-.home-bal__band { fill: var(--forest-2); }
 .home-bal__zero { stroke: var(--on-forest-2); stroke-width: 1; stroke-dasharray: 2 4; opacity: .6; }
 .home-bal__area { fill: color-mix(in oklch, var(--on-forest) 10%, transparent); }
 .home-bal__line {
@@ -192,6 +214,8 @@
 .home-bal__dot { fill: var(--forest); stroke: var(--on-forest); stroke-width: 2; }
 .home-bal__scale, .home-flow__scale {
   position: relative;
+  /* Ancho mínimo estable: el lienzo no salta de sitio al cambiar de periodo o en un periodo vacío («0»). */
+  min-inline-size: 4.25rem;
   font-size: var(--t-micro);
   font-variant-numeric: var(--num);
   text-align: end;
@@ -204,19 +228,22 @@
 .home-bal__tick, .home-flow__tick { position: absolute; inset-inline-end: 0; translate: 0 -50%; line-height: 1; }
 .home-bal__grid { stroke: color-mix(in oklch, var(--on-forest) 12%, transparent); stroke-width: 1; }
 .home-bal__canvas { position: relative; }
-.home-bal__axisx {
+/* Rótulos del eje X (AxisLabels): centrados en su cubo, pero el primero y el último se apoyan en el borde del
+   lienzo si no caben centrados (--room-l / --room-r: distancia a cada borde). */
+.home-axis {
   position: relative;
   block-size: var(--s-6);
   font-size: var(--t-micro);
-  color: var(--on-forest-2);
+  font-variant-numeric: var(--num);
 }
-.home-bal__axisx span {
+.home-axis span {
   position: absolute;
   inset-block-end: 0;
-  translate: -50% 0;
   white-space: nowrap;
+  translate: calc(-1 * max(100% - var(--room-r, 50%), min(50%, var(--room-l, 50%)))) 0;
 }
-.home-bal__axisx span:first-child { translate: 0 0; }
+.home-bal__axisx { color: var(--on-forest-2); }
+.home-bal__axisx .is-today { color: var(--on-forest); font-weight: var(--w-strong); }
 
 /* ───────────────────────── Libro abierto: dos columnas desiguales ───────────────────────── */
 .home-grid {
@@ -236,12 +263,11 @@
 
 /* Flujo mensual */
 .home-flow { margin: 0; display: grid; gap: var(--s-3); min-inline-size: 0; }
+/* Título y totales siempre en dos renglones: la cabecera mide lo mismo con un título corto («2026») o largo. */
 .home-flow__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s-2) var(--s-6);
+  display: grid;
+  justify-items: start;
+  gap: var(--s-1);
 }
 .home-flow__readout {
   display: flex;
@@ -267,7 +293,20 @@
   cursor: pointer;
   border-radius: var(--r-1);
 }
-.home-flow__band { fill: var(--surface-2); }
+.home-flow__svg.is-idle { cursor: default; }
+.home-flow__weekend { fill: color-mix(in oklch, var(--ink) 2.5%, transparent); }
+.home-flow__sep { stroke: var(--rule-strong); stroke-width: 1; stroke-dasharray: 2 3; opacity: .7; }
+.home-flow__axis--future { stroke-dasharray: 2 4; opacity: .6; }
+.home-flow__empty {
+  position: absolute;
+  inset-block-start: calc(var(--s-16) + var(--s-6));
+  inset-inline: 0;
+  margin: 0;
+  text-align: center;
+  font-size: var(--t-small);
+  color: var(--ink-3);
+  pointer-events: none;
+}
 .home-flow__guide { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 1 3; }
 .home-flow__axis { stroke: var(--rule-strong); stroke-width: 1; }
 .home-flow__in { fill: var(--chart-in); }
@@ -276,19 +315,15 @@
 .home-hatch__line { fill: var(--chart-out); }
 .home-flow__m { transition: opacity var(--d-micro) var(--ease-out); }
 .home-flow__m.is-dim { opacity: .45; }
+/* Programado (fecha posterior a hoy): lavado con contorno discontinuo, en vez de relleno. */
+.home-flow__m.is-scheduled .home-flow__in { fill: var(--in-wash); stroke: var(--chart-in); stroke-width: 1.25; stroke-dasharray: 3 2; }
+.home-flow__m.is-scheduled .home-flow__out { fill: var(--out-wash); stroke-width: 1.25; stroke-dasharray: 3 2; }
 .home-flow__netline { fill: none; stroke: var(--ink); stroke-width: 1.25; stroke-linejoin: round; opacity: .55; }
 .home-flow__netdot { fill: var(--bg); stroke: var(--ink); stroke-width: 1.5; }
 .home-flow__netdot.is-active { stroke-width: 2; }
-.home-flow__axisx {
-  display: flex;
-  block-size: var(--s-6);
-  align-items: end;
-  font-size: var(--t-micro);
-  color: var(--ink-3);
-  font-variant-numeric: var(--num);
-}
-.home-flow__axisx span { flex: 1 1 0; min-inline-size: 0; text-align: center; white-space: nowrap; }
-.home-flow__axisx .is-period { color: var(--ink-2); font-weight: var(--w-strong); }
+/* Los rótulos de días futuros no se atenúan (contraste ≥4.5:1): lo que aún no llega lo marca el eje punteado. */
+.home-flow__axisx { color: var(--ink-3); }
+.home-flow__axisx .is-today { color: var(--ink); font-weight: var(--w-strong); }
 .home-flow__axisx .is-active { color: var(--ink); }
 
 .home-table summary {
@@ -302,6 +337,7 @@
 }
 .home-table .ui-table a { color: inherit; }
 .home-table .ui-table a::first-letter { text-transform: uppercase; }
+.home-table__note { color: var(--ink-3); font-size: var(--t-meta); }
 
 /* Reparto */
 .home-bd { display: grid; gap: var(--s-4); min-inline-size: 0; }
@@ -585,19 +621,23 @@
 
 /* ───────────────────────── Entrada: un solo momento, solo si se acepta movimiento ───────────────────────── */
 @media (prefers-reduced-motion: no-preference) {
+  /* Solo la primera entrada (DESIGN §14): pasada esta, la gráfica lleva `.is-settled` y al cambiar de periodo
+     las series cambian sin volver a animarse. */
   .home-bal__line {
     stroke-dasharray: 1;
-    animation: home-draw calc(var(--d-count) * 1.6) var(--ease-out) both;
+    animation: home-draw var(--d-count) var(--ease-out) both;
   }
-  .home-bal__area { animation: home-fade var(--d-count) var(--ease-out) calc(var(--d-count) * .5) both; }
+  .home-bal__area { animation: home-fade var(--d-sheet) var(--ease-out) calc(var(--d-count) * .4) both; }
+  .home-bal__prev, .home-flow__net-g { animation: home-fade var(--d-route) var(--ease-out) var(--d-route) both; }
   .home-flow__in, .home-flow__out {
     transform-box: fill-box;
-    animation: home-grow 320ms var(--ease-out) both;
-    animation-delay: calc(var(--i, 0) * 28ms);
+    animation: home-grow var(--d-sheet) var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * var(--stagger, 28ms));
   }
   .home-flow__in { transform-origin: bottom; }
   .home-flow__out { transform-origin: top; }
   .home-bd__bar { animation: home-grow-x 320ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 30ms); }
+  .is-settled :is(.home-bal__line, .home-bal__area, .home-bal__prev, .home-flow__net-g, .home-flow__in, .home-flow__out) { animation: none; }
 }
 @keyframes home-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 @keyframes home-fade { from { opacity: 0; } }
@@ -631,7 +671,7 @@
 .home-tip__title { margin: 0 0 var(--s-1); font-weight: var(--w-strong); white-space: nowrap; }
 .home-tip__title::first-letter { text-transform: uppercase; }
 .home-tip__row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-4); }
-.home-tip__label { color: var(--ink-2); font-size: var(--t-meta); }
+.home-tip__label { color: var(--ink-2); font-size: var(--t-meta); white-space: nowrap; }
 .home-tip__row--strong { padding-block-start: var(--s-1); border-block-start: var(--bw) solid var(--rule); }
 .home-tip__row--strong .ui-amount { font-weight: var(--w-strong); }
 .home-tip .ui-amount--row { font-size: var(--t-small); }

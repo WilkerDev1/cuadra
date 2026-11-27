@@ -12,9 +12,9 @@ test('bienvenida → datos de ejemplo → inicio con cifras', async ({ page }) =
   await expect(total).toContainText('RD$');
   expect(minorOf(await total.innerText())).not.toBe(0);
   await expect(page.getByRole('region', { name: 'Últimos movimientos' }).getByRole('link').first()).toBeVisible();
-  // Los tres espacios de ejemplo quedan en el selector.
+  // Los cuatro espacios de ejemplo quedan en el selector.
   await go(page, '/');
-  for (const name of ['Colmado La Esquina', 'Estudio Creativo Brisa, SRL', 'Mis finanzas']) {
+  for (const name of ['Colmado La Esquina', 'Estudio Creativo Brisa, SRL', 'Mis finanzas', 'Iglesia Camino de Luz']) {
     await expect(page.getByRole('main').getByText(name, { exact: false }).first()).toBeVisible();
   }
 });

@@ -150,11 +150,19 @@ export interface DashboardData {
   /** Saldo al cierre de cada paso. `byAccount` incluye todas las cuentas (también archivadas). */
   series: { unit: 'day' | 'week' | 'month'; keys: string[]; totalMinor: Minor[]; byAccount: Record<Id, Minor[]> };
   /**
-   * Un punto por día del periodo (sin pasar de hoy ni del ancla de las series): entradas y salidas del día y
-   * saldo total del espacio al cierre. Vacío si el espacio no tiene movimientos; como mucho 1 100 días (los
+   * Un punto por día del periodo, hasta hoy o, si hay movimientos con fecha posterior, hasta el último de ellos
+   * (sin pasar del fin del periodo): entradas y salidas del día y saldo total del espacio al cierre. Así sus
+   * sumas son las de `period.totals`. Vacío si el espacio no tiene movimientos; como mucho 1 100 días (los
    * últimos), así "todo" no crece sin límite.
    */
-  daily: Array<{ date: IsoDate; inMinor: Minor; outMinor: Minor; netMinor: Minor; balanceMinor: Minor }>;
+  daily: Array<{ date: IsoDate; inMinor: Minor; outMinor: Minor; netMinor: Minor; balanceMinor: Minor; count: number }>;
+  /** Saldo total al cierre del día anterior al primer punto de `daily` (de donde arranca la línea); 0 sin datos. */
+  dailyOpeningMinor: Minor;
+  /**
+   * Saldo total al cierre de cada día del periodo anterior equivalente, con su apertura: la línea tenue de
+   * comparación del panel. `null` sin periodo anterior o sin movimientos. Mismo tope de días que `daily`.
+   */
+  previousDaily: { openingMinor: Minor; balances: Array<{ date: IsoDate; balanceMinor: Minor }> } | null;
   /** Cuentas no archivadas con su saldo, en orden manual. */
   accounts: AccountWithBalance[];
   breakdown: {
@@ -1110,6 +1118,42 @@ async function queryCube(exec: SqlExecutor, workspaceId: Id): Promise<CubeCell[]
   });
 }
 
+/**
+ * Un punto por día de [from, to] desde el cubo: entradas, salidas, movimientos y saldo total al cierre, más el
+ * saldo al cierre del día anterior. Como mucho `DASHBOARD_DAILY_MAX` días (los últimos).
+ */
+function dailyCloses(
+  cube: readonly CubeCell[],
+  from: IsoDate,
+  to: IsoDate,
+): { openingMinor: Minor; days: DashboardData['daily'] } {
+  let dayFrom = from;
+  if (diffDays(dayFrom, to) >= DASHBOARD_DAILY_MAX) dayFrom = addDays(to, -(DASHBOARD_DAILY_MAX - 1));
+  let run = 0;
+  const byDay = new Map<IsoDate, { i: Minor; o: Minor; s: Minor; n: number }>();
+  for (const c of cube) {
+    if (c.date < dayFrom) run = minorOf(run + c.signedMinor);
+    else if (c.date <= to) {
+      const e = byDay.get(c.date) ?? { i: 0, o: 0, s: 0, n: 0 };
+      e.i = minorOf(e.i + c.totals.inMinor);
+      e.o = minorOf(e.o + c.totals.outMinor);
+      e.s = minorOf(e.s + c.signedMinor);
+      e.n += c.inCount + c.outCount;
+      byDay.set(c.date, e);
+    }
+  }
+  const openingMinor = run;
+  const days: DashboardData['daily'] = [];
+  for (let d = dayFrom; d <= to; d = addDays(d, 1)) {
+    const e = byDay.get(d);
+    if (e !== undefined) run = minorOf(run + e.s);
+    const i = e?.i ?? 0;
+    const o = e?.o ?? 0;
+    days.push({ date: d, inMinor: i, outMinor: o, netMinor: minorOf(i - o), balanceMinor: run, count: e?.n ?? 0 });
+  }
+  return { openingMinor, days };
+}
+
 /** Saldo y último movimiento activo por cuenta desde el cubo; el saldo inicial, del contexto. */
 function statsFromCube(cube: readonly CubeCell[], openings: ReadonlyMap<Id, Id>): Map<Id, AccountStats> {
   const out = new Map<Id, AccountStats>();
@@ -1616,33 +1660,23 @@ export function createQueriesService(deps: CoreDeps): QueriesService {
         dupItems.push({ transactionId: r.y, duplicateOfId: r.x });
       }
 
-      // 6 · Serie diaria del periodo (de los mismos datos del cubo).
-      const daily: DashboardData['daily'] = [];
+      // 6 · Serie diaria del periodo y del anterior equivalente (de los mismos datos del cubo).
+      let daily: DashboardData['daily'] = [];
+      let dailyOpeningMinor: Minor = 0;
+      let previousDaily: DashboardData['previousDaily'] = null;
       if (cube.length > 0) {
         const firstDate = cube.reduce((m, c) => (c.date < m ? c.date : m), cube[0]!.date);
-        const dayTo = period.to !== null && period.to < anchor ? period.to : anchor;
-        let dayFrom = period.from ?? firstDate;
-        if (diffDays(dayFrom, dayTo) >= DASHBOARD_DAILY_MAX) dayFrom = addDays(dayTo, -(DASHBOARD_DAILY_MAX - 1));
-        if (dayFrom <= dayTo) {
-          let run = 0;
-          const byDay = new Map<IsoDate, { i: Minor; o: Minor; s: Minor }>();
-          for (const c of cube) {
-            if (c.date < dayFrom) run = minorOf(run + c.signedMinor);
-            else if (c.date <= dayTo) {
-              const e = byDay.get(c.date) ?? { i: 0, o: 0, s: 0 };
-              e.i = minorOf(e.i + c.totals.inMinor);
-              e.o = minorOf(e.o + c.totals.outMinor);
-              e.s = minorOf(e.s + c.signedMinor);
-              byDay.set(c.date, e);
-            }
-          }
-          for (let d = dayFrom; d <= dayTo; d = addDays(d, 1)) {
-            const e = byDay.get(d);
-            if (e !== undefined) run = minorOf(run + e.s);
-            const i = e?.i ?? 0;
-            const o = e?.o ?? 0;
-            daily.push({ date: d, inMinor: i, outMinor: o, netMinor: minorOf(i - o), balanceMinor: run });
-          }
+        const lastDate = cube.reduce((m, c) => (c.date > m ? c.date : m), cube[0]!.date);
+        // Hasta hoy o, si hay movimientos con fecha posterior, hasta el último (sin pasar del fin del periodo):
+        // así las gráficas suman lo mismo que los totales del periodo, que cuentan también lo programado.
+        const horizon = lastDate > today ? lastDate : today;
+        const dayTo = period.to !== null && period.to < horizon ? period.to : horizon;
+        const cur = dailyCloses(cube, period.from ?? firstDate, dayTo);
+        daily = cur.days;
+        dailyOpeningMinor = cur.openingMinor;
+        if (prev !== null) {
+          const p = dailyCloses(cube, prev.from, prev.to);
+          previousDaily = { openingMinor: p.openingMinor, balances: p.days.map((x) => ({ date: x.date, balanceMinor: x.balanceMinor })) };
         }
       }
 
@@ -1671,6 +1705,8 @@ export function createQueriesService(deps: CoreDeps): QueriesService {
         }),
         series: { unit: seriesUnit, keys: seriesKeys, totalMinor: totalSeries, byAccount: byAccountSeries },
         daily,
+        dailyOpeningMinor,
+        previousDaily,
         accounts: allAccounts.filter((a) => a.archivedAt === null),
         breakdown: {
           groupBy: breakdownBy,

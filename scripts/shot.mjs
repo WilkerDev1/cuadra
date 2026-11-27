@@ -4,7 +4,7 @@
 //   node scripts/shot.mjs --profile mio --path '/e/@colmado' --size 1440x900 --scheme dark --out docs/screens/x.png
 //
 // --profile  nombre del perfil de navegador (guarda la base entre corridas; usa uno propio por tarea)
-// --path     ruta hash. `@colmado`, `@despacho`, `@personal` se sustituyen por el id del espacio de ejemplo
+// --path     ruta hash. `@colmado`, `@despacho`, `@personal`, `@iglesia` se sustituyen por el id del espacio de ejemplo
 // --size     ANCHOxALTO (390x844 activa modo táctil)          --scheme  light | dark
 // --full     página completa                                   --wait    ms extra antes de capturar
 // --click    selector a pulsar antes de capturar (repetible)   --eval    JS a ejecutar en la página (repetible)
@@ -38,7 +38,7 @@ export function findChromium() {
   return undefined; // deja que Playwright busque el suyo
 }
 
-const PROFILE_NAMES = { colmado: 'Colmado', despacho: 'Estudio', personal: 'Mis finanzas' };
+const PROFILE_NAMES = { colmado: 'Colmado', despacho: 'Estudio', personal: 'Mis finanzas', iglesia: 'Iglesia' };
 
 /** Abre la app con un perfil persistente y carga los datos de ejemplo si la base está vacía. */
 export async function openApp({ profile = 'default', size = '1440x900', scheme = 'light', base = 'http://localhost:5199', seed = true, reset = false } = {}) {

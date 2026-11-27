@@ -23,7 +23,7 @@ Cuadra es una demo funcional de una libreta financiera (libro de caja, no partid
 
 ## Qué puedes probar en la demo
 
-- **Datos de ejemplo.** Desde la bienvenida se cargan tres espacios ficticios con unos 14 meses de actividad, generados con semilla fija: un colmado, un cliente de despacho contable y unas finanzas personales.
+- **Datos de ejemplo.** Desde la bienvenida se cargan cuatro espacios ficticios con unos 14 meses de actividad, generados con semilla fija: un colmado, un cliente de despacho contable, unas finanzas personales y una iglesia (organización sin fines de lucro).
 - **Anotar.** Entrada, salida y transferencia, con teclado numérico propio en móvil (admite sumas, restas y multiplicaciones) y sugerencias de concepto.
 - **Captura en lote.** Tabla de captura con total de control, pegado desde Excel y lotes que se pueden anular o restaurar.
 - **Plantillas.** Negocio pequeño, despacho contable, organización, finanzas personales y en blanco. Un espacio se guarda como plantilla y se exporta o importa como archivo.
@@ -33,7 +33,7 @@ Cuadra es una demo funcional de una libreta financiera (libro de caja, no partid
 - **Acceso local.** Contraseña, pantalla de bloqueo, clave de recuperación, espera creciente tras intentos fallidos y bloqueo automático por inactividad configurable.
 - **Historial.** Cada edición, anulación (con motivo) y restauración queda registrada, por movimiento y en general. Los movimientos no se borran, se anulan. Borrar un espacio entero sí elimina sus datos y su historial.
 - **Informes.** Resumido y detallado, con vistas guardables, impresión a PDF, CSV y Excel.
-- **Panel y resumen.** Panel de escritorio con gráficas interactivas (clic en una barra abre los movimientos que la forman), resumen por periodo y por cualquier campo, y avisos de lo que pide atención.
+- **Panel y resumen.** Panel de escritorio con gráficas que se adaptan al periodo (el mes día a día, el trimestre por semanas, el año y los 12 meses por mes; saldo con comparación del periodo anterior y lo programado a futuro) e interactivas (clic en una barra abre los movimientos que la forman), resumen por periodo y por cualquier campo, y avisos de lo que pide atención.
 
 ## Cómo correrlo
 
