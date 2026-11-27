@@ -11,10 +11,11 @@ export function ToastHost() {
   const items = useMemo(
     () =>
       toasts.map((toast): ToastItem => {
-        const undo = toast.undo;
-        return undo === undefined
-          ? { id: toast.id, message: t(toast.message), tone: 'info' }
-          : { id: toast.id, message: t(toast.message), tone: 'undo', action: { label: t('common.undo'), onAction: undo } };
+        const message = t(toast.message, toast.params);
+        if (toast.undo !== undefined) {
+          return { id: toast.id, message, tone: 'undo', action: { label: t('common.undo'), onAction: toast.undo } };
+        }
+        return { id: toast.id, message, tone: toast.tone ?? 'info' };
       }),
     [toasts, t],
   );

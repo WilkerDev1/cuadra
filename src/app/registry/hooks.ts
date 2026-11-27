@@ -1,6 +1,12 @@
 import { features } from './collect';
-import { selectHomeCards, selectNav, selectQuickActions, selectSettingsSections } from './select';
-import type { HomeCardDef, NavEntry, QuickAction, Scope, SettingsSectionDef } from './types';
+import {
+  selectHomeCards,
+  selectLockScreen,
+  selectNav,
+  selectQuickActions,
+  selectSettingsSections,
+} from './select';
+import type { HomeCardDef, LockScreenDef, NavEntry, QuickAction, Scope, SettingsSectionDef } from './types';
 
 // El registro es estático (se resuelve en tiempo de compilación con import.meta.glob), así que
 // estos hooks devuelven siempre las mismas listas ya ordenadas y estables entre renders.
@@ -24,4 +30,9 @@ export function useHomeCards(): HomeCardDef[] {
 
 export function useSettingsSections(scope: Scope = 'workspace'): SettingsSectionDef[] {
   return memo(`settings|${scope}`, () => selectSettingsSections(features, scope));
+}
+
+/** La pantalla de bloqueo registrada por la feature de autenticación, o `null` si nadie la registró. */
+export function useLockScreenDef(): LockScreenDef | null {
+  return memo('lock', () => selectLockScreen(features));
 }

@@ -1,7 +1,7 @@
 // Arranque (ARCHITECTURE.md 3.1 y ADR-9): único sitio que conoce los adaptadores. Abre la base (candado
 // entre pestañas → OPFS → respaldo :memory:+IndexedDB → migrar) y crea la fachada del núcleo.
 import { createCuadra, type Cuadra } from '../core';
-import { DataError, openDatabase, type OpenDatabaseOptions, type OpenedDatabase, type StorageStatus } from '../data';
+import { createRestoreCopySink, DataError, openDatabase, type OpenDatabaseOptions, type OpenedDatabase, type StorageStatus } from '../data';
 
 export interface BootInfo {
   storage: StorageStatus;
@@ -55,7 +55,15 @@ export async function boot(hooks: BootHooks): Promise<void> {
       },
       ...(hooks.onPersistError === undefined ? {} : { onPersistError: hooks.onPersistError }),
     });
-    const cuadra = createCuadra({ driver: db, locale: 'es-DO', schemaVersion: db.schema.to });
+    const autoCopy = createRestoreCopySink();
+    const cuadra = createCuadra({
+      driver: db,
+      locale: 'es-DO',
+      schemaVersion: db.schema.to,
+      // Versión de package.json (define de vite.config). En Vitest no existe y el núcleo usa la suya.
+      ...(typeof import.meta.env.VITE_APP_VERSION === 'string' ? { appVersion: import.meta.env.VITE_APP_VERSION } : {}),
+      ...(autoCopy === undefined ? {} : { backupAutoCopy: autoCopy }),
+    });
     hooks.onState({
       status: 'ready',
       cuadra,

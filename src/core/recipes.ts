@@ -269,9 +269,22 @@ function validateFilter(filter: TxFilter, byId: Map<Id, Field>, sink: WarningSin
     if (!field.active) sink.add({ code: 'field_inactive', fieldId: field.id });
     if (cond.op === 'any_of') {
       const options = new Map(field.options.map((o) => [o.id, o]));
-      const optionIds = cond.optionIds.filter((id) => options.has(id));
-      for (const id of optionIds) {
+      // Una opción fusionada ya no tiene valores (se movieron al destino): la receta sigue al destino final.
+      const target = (id: Id): Id => {
+        let current = id;
+        for (let hops = 0; hops < options.size; hops++) {
+          const next = options.get(current)?.mergedIntoId;
+          if (next === null || next === undefined || !options.has(next)) break;
+          current = next;
+        }
+        return current;
+      };
+      const optionIds: Id[] = [];
+      for (const id of cond.optionIds) {
+        if (!options.has(id)) continue;
         if (options.get(id)?.active === false) sink.add({ code: 'option_inactive', fieldId: field.id, optionId: id });
+        const final = target(id);
+        if (!optionIds.includes(final)) optionIds.push(final);
       }
       if (optionIds.length === 0 && cond.optionIds.length > 0) continue;
       fields.push({ ...cond, optionIds });

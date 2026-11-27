@@ -1,0 +1,195 @@
+{
+  "format": "cuadra-template",
+  "formatVersion": 1,
+  "id": "organizacion",
+  "version": 1,
+  "name": "Organización",
+  "description": "Asociación, iglesia, junta de vecinos u ONG: ingresos por diezmos, ofrendas, cuotas y donaciones, gastos por categoría y saldos por fondo, con recibo y conciliación para rendir cuentas a la asamblea.",
+  "color": "tint-3",
+  "currency": { "code": "DOP", "minorDigits": 2, "symbol": "RD$" },
+  "accounts": [
+    { "key": "caja", "name": "Caja", "type": "cash", "icon": "Wallet" },
+    { "key": "banco", "name": "Cuenta bancaria", "type": "bank", "icon": "Landmark" },
+    { "key": "caja_chica", "name": "Caja chica", "type": "cash", "icon": "Wallet" }
+  ],
+  "fields": [
+    {
+      "key": "categoria",
+      "label": "Categoría",
+      "type": "list",
+      "role": "category",
+      "showInList": true,
+      "options": [
+        { "key": "diezmos", "label": "Diezmos", "appliesTo": "in", "color": "tint-1" },
+        { "key": "ofrendas", "label": "Ofrendas", "appliesTo": "in", "color": "tint-1" },
+        { "key": "cuotas", "label": "Cuotas de socios", "appliesTo": "in", "color": "tint-2" },
+        { "key": "donaciones", "label": "Donaciones", "appliesTo": "in", "color": "tint-2" },
+        { "key": "actividades", "label": "Actividades y rifas", "appliesTo": "in", "color": "tint-7" },
+        { "key": "subvenciones", "label": "Subvenciones y aportes", "appliesTo": "in", "color": "tint-7" },
+        { "key": "otros_ingresos", "label": "Otros ingresos", "appliesTo": "in", "color": "tint-8" },
+        { "key": "alquiler", "label": "Alquiler del local", "appliesTo": "out", "color": "tint-4" },
+        { "key": "servicios_basicos", "label": "Electricidad, agua e internet", "appliesTo": "out", "color": "tint-5" },
+        { "key": "salarios", "label": "Salarios y honorarios", "appliesTo": "out", "color": "tint-6" },
+        { "key": "ayuda_social", "label": "Ayuda social", "appliesTo": "out", "color": "tint-3" },
+        { "key": "materiales", "label": "Materiales y suministros", "appliesTo": "out", "color": "tint-3" },
+        { "key": "eventos", "label": "Gastos de eventos", "appliesTo": "out", "color": "tint-2" },
+        { "key": "mantenimiento", "label": "Mantenimiento y reparaciones", "appliesTo": "out", "color": "tint-4" },
+        { "key": "construccion", "label": "Obras y construcción", "appliesTo": "out", "color": "tint-4" },
+        { "key": "transporte", "label": "Transporte", "appliesTo": "out", "color": "tint-2" },
+        { "key": "comisiones", "label": "Comisiones bancarias", "appliesTo": "out", "color": "tint-8" },
+        { "key": "otros_gastos", "label": "Otros gastos", "appliesTo": "out", "color": "tint-8" }
+      ]
+    },
+    {
+      "key": "fondo",
+      "label": "Fondo",
+      "type": "list",
+      "role": "fund",
+      "showInList": true,
+      "options": [
+        { "key": "general", "label": "Fondo general", "color": "tint-1" },
+        { "key": "construccion", "label": "Fondo de construcción", "color": "tint-4" },
+        { "key": "misiones", "label": "Misiones y proyectos", "color": "tint-2" },
+        { "key": "ayuda_social", "label": "Ayuda social", "color": "tint-3" },
+        { "key": "becas", "label": "Becas", "color": "tint-6" }
+      ]
+    },
+    {
+      "key": "contacto",
+      "label": "Persona o entidad",
+      "type": "list",
+      "role": "contact",
+      "options": [
+        { "key": "anonimo", "label": "Anónimo", "appliesTo": "in" },
+        { "key": "proveedor_ocasional", "label": "Proveedor ocasional", "appliesTo": "out" }
+      ]
+    },
+    {
+      "key": "metodo_pago",
+      "label": "Método de pago",
+      "type": "list",
+      "role": "payment_method",
+      "options": [
+        { "key": "efectivo", "label": "Efectivo" },
+        { "key": "transferencia", "label": "Transferencia" },
+        { "key": "deposito", "label": "Depósito" },
+        { "key": "cheque", "label": "Cheque" },
+        { "key": "tarjeta", "label": "Tarjeta" }
+      ]
+    },
+    { "key": "recibo", "label": "Recibo n.º", "type": "text", "role": "reference", "showInList": true },
+    { "key": "fecha_actividad", "label": "Fecha de la actividad", "type": "date" },
+    { "key": "asistentes", "label": "Asistentes", "type": "number", "appliesTo": "in" },
+    { "key": "conciliado", "label": "Conciliado", "type": "bool", "role": "reconciled" }
+  ],
+  "views": [
+    {
+      "key": "donaciones_anonimas",
+      "name": "Donaciones anónimas",
+      "kind": "filter",
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": {
+          "kinds": ["income"],
+          "fields": [{ "fieldId": "contacto", "op": "any_of", "optionIds": ["anonimo"] }]
+        }
+      }
+    },
+    {
+      "key": "sin_recibo",
+      "name": "Gastos sin recibo",
+      "kind": "filter",
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": { "kinds": ["expense"], "fields": [{ "fieldId": "recibo", "op": "empty" }] },
+        "sort": { "by": "date", "dir": "desc" }
+      }
+    },
+    {
+      "key": "banco_sin_conciliar",
+      "name": "Banco sin conciliar",
+      "kind": "filter",
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": { "accountIds": ["banco"], "fields": [{ "fieldId": "conciliado", "op": "is", "value": false }] }
+      }
+    },
+    {
+      "key": "saldos_por_fondo",
+      "name": "Saldo por fondo",
+      "kind": "summary",
+      "pinned": true,
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "this_year" } },
+        "groupBy": { "by": "field", "fieldId": "fondo" },
+        "measure": "net",
+        "chart": "table"
+      }
+    },
+    {
+      "key": "ingresos_por_categoria",
+      "name": "Ingresos por categoría",
+      "kind": "summary",
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "this_month" }, "kinds": ["income"] },
+        "groupBy": { "by": "field", "fieldId": "categoria" },
+        "measure": "in",
+        "chart": "donut"
+      }
+    },
+    {
+      "key": "gastos_por_fondo",
+      "name": "Gastos por fondo y categoría",
+      "kind": "summary",
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "this_year" }, "kinds": ["expense"] },
+        "groupBy": { "by": "field", "fieldId": "fondo" },
+        "split": { "by": "field", "fieldId": "categoria" },
+        "measure": "out",
+        "chart": "bars"
+      }
+    },
+    {
+      "key": "informe_asamblea",
+      "name": "Informe a la asamblea",
+      "kind": "report",
+      "pinned": true,
+      "recipe": {
+        "v": 1,
+        "kind": "report",
+        "form": "summary",
+        "filter": { "period": { "preset": "last_quarter" } },
+        "sections": ["header", "statement", "by_account", "by_field", "transfers", "signature"],
+        "groupByFieldIds": ["fondo", "categoria"],
+        "columns": ["date", "description", "account", "amount"],
+        "includeVoided": false,
+        "signature": true
+      }
+    },
+    {
+      "key": "detalle_por_fondo",
+      "name": "Detalle de movimientos por fondo",
+      "kind": "report",
+      "recipe": {
+        "v": 1,
+        "kind": "report",
+        "form": "detailed",
+        "filter": { "period": { "preset": "last_month" } },
+        "sections": ["header", "statement", "by_field", "movements", "voided"],
+        "groupByFieldIds": ["fondo"],
+        "columns": ["date", "seq", "description", "fondo", "categoria", "recibo", "amount"],
+        "includeVoided": true,
+        "signature": false
+      }
+    }
+  ]
+}

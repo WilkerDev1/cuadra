@@ -1,22 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createTestCuadra, TEST_TODAY, type TestCuadra } from '../test/harness';
-import { createCuadra, isDomainError, type Cuadra } from './index';
+import { createCuadra, type Cuadra } from './index';
 
 let h: TestCuadra | undefined;
 afterEach(async () => {
   await h?.driver.close();
   h = undefined;
 });
-
-/** Llama a un método del stub y devuelve el error (síncrono o rechazo). */
-async function failure(call: () => unknown): Promise<unknown> {
-  try {
-    await call();
-  } catch (e) {
-    return e;
-  }
-  return undefined;
-}
 
 describe('createCuadra y createTestCuadra', () => {
   it('createTestCuadra migra node:sqlite en memoria con reloj fijo e ids deterministas', async () => {
@@ -39,30 +29,39 @@ describe('createCuadra y createTestCuadra', () => {
     await other.driver.close();
   });
 
-  it('cada servicio está cableado y sus métodos lanzan not_implemented', async () => {
+  it('cada servicio está cableado con métodos reales (ninguno es un stub)', async () => {
     h = await createTestCuadra();
     const c: Cuadra = h.cuadra;
-    const calls: Array<[string, () => unknown]> = [
-      ['workspaces.list', () => c.workspaces.list()],
-      ['accounts.get', () => c.accounts.get('x')],
-      ['transactions.create', () => c.transactions.create({ accountId: 'a', kind: 'income', amountMinor: 1, date: TEST_TODAY, description: 'x' })],
-      ['batches.list', () => c.batches.list('w')],
-      ['fields.list', () => c.fields.list('w')],
-      ['queries.totals', () => c.queries.totals('w', {})],
-      ['reports.preset', () => c.reports.preset('summary', { preset: 'this_month' })],
-      ['views.get', () => c.views.get('v')],
-      ['audit.forEntity', () => c.audit.forEntity('transaction', 't')],
-      ['settings.get', () => c.settings.get('theme')],
-      ['templates.list', () => c.templates.list()],
-      ['backup.inspect', () => c.backup.inspect('{}')],
-      ['importCsv.parse', () => c.importCsv.parse('a,b')],
-      ['demo.profiles', () => c.demo.profiles()],
-    ];
-    for (const [method, call] of calls) {
-      const e = await failure(call);
-      expect(isDomainError(e, 'not_implemented'), method).toBe(true);
-      expect((e as { details?: unknown }).details).toEqual({ method });
+    const services = {
+      workspaces: ['list', 'get', 'create', 'update', 'reorder', 'archive', 'unarchive', 'purge'],
+      accounts: ['list', 'get', 'create', 'update', 'reorder', 'archive', 'unarchive'],
+      transactions: ['get', 'check', 'create', 'createTransfer', 'setOpening', 'update', 'void', 'restore', 'duplicate', 'history', 'suggestDescriptions', 'createMany'],
+      batches: ['capture', 'previewCapture', 'list', 'get', 'void', 'restore'],
+      fields: ['list', 'formSchema', 'dimensions', 'create', 'update', 'deactivate', 'reactivate', 'addOption', 'updateOption', 'mergeOptions', 'similarOptions'],
+      queries: ['listTransactions', 'listByDay', 'totals', 'balances', 'balanceSeries', 'summarize', 'home', 'dashboard'],
+      reports: ['build', 'preset'],
+      views: ['list', 'get', 'save', 'update'],
+      audit: ['list', 'forEntity'],
+      auth: ['status', 'snapshot', 'setup', 'unlock', 'unlockWithRecoveryKey', 'lock', 'changePassword', 'disable', 'setAutoLock', 'touch', 'checkIdle', 'encrypt', 'decrypt', 'subscribe'],
+      settings: ['get', 'set', 'getWs', 'setWs'],
+      templates: ['list', 'get', 'preview', 'apply', 'applyWithKeys', 'validate', 'parse', 'exportFromWorkspace', 'serialize'],
+      backup: ['export', 'markVerified', 'inspect', 'restoreAll', 'importWorkspace', 'lastAutoCopy'],
+      importCsv: ['parse', 'decode', 'fromRows', 'detectColumns', 'suggestMapping', 'preview', 'commit', 'templateCsv', 'templateTable'],
+      demo: ['profiles', 'plan', 'seed'],
+    } as const;
+    for (const [name, methods] of Object.entries(services)) {
+      const service = (c as unknown as Record<string, Record<string, unknown>>)[name];
+      expect(service, name).toBeTypeOf('object');
+      for (const m of methods) expect(service?.[m], `${name}.${m}`).toBeTypeOf('function');
     }
+    // Lecturas sobre una base vacía: responden sin lanzar.
+    expect(await c.workspaces.list()).toEqual([]);
+    expect(await c.settings.get('theme')).toBe('system');
+    expect((await c.templates.list()).length).toBeGreaterThan(0);
+    expect(c.demo.profiles().map((p) => p.id)).toEqual(['colmado', 'despacho', 'personal']);
+    expect(await c.auth.status()).toMatchObject({ enabled: false, locked: false });
+    expect(c.importCsv.parse('Fecha,Monto\n2026-06-01,10').headers).toEqual(['Fecha', 'Monto']);
+    expect((await c.backup.inspect('{}')).ok).toBe(false);
   });
 
   it('subscribe devuelve la función para darse de baja', async () => {

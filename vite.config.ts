@@ -1,9 +1,12 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import pkg from './package.json' with { type: 'json' };
 
 export default defineConfig({
   base: './',
+  // Versión de package.json para los respaldos (src/app/boot.ts → CuadraDeps.appVersion).
+  define: { 'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version) },
   plugins: [
     react(),
     VitePWA({

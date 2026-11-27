@@ -38,6 +38,11 @@ export function CuadraProvider({
       }),
     [cuadra, queryClient],
   );
+  // Solo en desarrollo: la fachada queda a mano en la consola y en las pruebas de navegador (`window.__cuadra`).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (globalThis as { __cuadra?: Cuadra }).__cuadra = cuadra;
+  }, [cuadra]);
   return (
     <CuadraContext.Provider value={cuadra}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

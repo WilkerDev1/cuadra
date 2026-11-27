@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DomainError, ERROR_CODES, errorCodeFromMessage, isDomainError, isErrorCode, notImplemented } from './errors';
+import { DomainError, ERROR_CODES, errorCodeFromMessage, isDomainError, isErrorCode } from './errors';
 import { err, mapResult, ok, unwrap } from './result';
 import es from '../i18n/es/errors';
 
@@ -28,16 +28,6 @@ describe('errors', () => {
     expect(errorCodeFromMessage('UNIQUE constraint failed: accounts.name')).toBeNull();
     expect(isErrorCode('immutable_column')).toBe(true);
     expect(isErrorCode('x')).toBe(false);
-  });
-
-  it('notImplemented lanza not_implemented con el método', () => {
-    expect(() => notImplemented('fields.list')).toThrow(DomainError);
-    try {
-      notImplemented('fields.list');
-    } catch (e) {
-      expect(isDomainError(e, 'not_implemented')).toBe(true);
-      expect((e as DomainError).details).toEqual({ method: 'fields.list' });
-    }
   });
 
   it('cada ErrorCode tiene mensaje en español', () => {

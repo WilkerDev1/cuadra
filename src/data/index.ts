@@ -10,13 +10,35 @@ import type { SqlDriver, SqlDriverInfo } from '../core/ports';
 import { DomainError } from '../core/errors';
 import { DataError } from './errors';
 import { migrate, type MigrateResult } from './migrate';
-import { openIdbStore, saveSnapshot, type ByteStore } from './wasm/idbStore';
+import { isIndexedDbAvailable, openIdbStore, saveSnapshot, type ByteStore } from './wasm/idbStore';
 import { acquireTabLock, type TabLockHandle, type TabLockOptions } from './wasm/tabLock';
 import { openWasmDriver, spawnDbWorker, WorkerClient, type WasmDriver, type WorkerPortLike } from './wasm/wasmDriver';
 
 export type { Row, SqlDriver, SqlDriverInfo, SqlExecutor, SqlParams, SqlValue } from '../core/ports';
 export { DataError, SqlError, type DataErrorCode } from './errors';
 export { LATEST_SCHEMA_VERSION } from './migrations';
+
+/** Lo que recibe el destino de la copia previa a restaurar (forma de AutoCopy del núcleo). */
+export interface RestoreCopy {
+  name: string;
+  createdAt: string;
+  bytes: Uint8Array;
+}
+
+/**
+ * Destino de la copia automática previa a restaurar un respaldo (CuadraDeps.backupAutoCopy): guarda el
+ * archivo SQLite completo en IndexedDB junto a las copias previas a migrar (se conservan las más recientes).
+ * Sin IndexedDB devuelve undefined y el núcleo guarda la copia dentro de la propia base.
+ */
+export function createRestoreCopySink(deps: { store?: ByteStore } = {}): ((copy: RestoreCopy) => Promise<void>) | undefined {
+  if (deps.store === undefined && !isIndexedDbAvailable()) return undefined;
+  let store: Promise<ByteStore> | null = null;
+  return async (copy) => {
+    store ??= deps.store === undefined ? openIdbStore() : Promise.resolve(deps.store);
+    const at = new Date(copy.createdAt);
+    await saveSnapshot(await store, `antes-de-restaurar:${copy.name}`, copy.bytes, Number.isNaN(at.getTime()) ? new Date() : at);
+  };
+}
 
 export interface OpenDatabaseOptions {
   /**

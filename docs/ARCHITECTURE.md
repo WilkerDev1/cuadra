@@ -656,6 +656,10 @@ export interface CuadraDeps {
   ids?: IdGen;                   // por defecto: uuidv7 con crypto.getRandomValues
   locale?: string;               // 'es-DO'
   schemaVersion?: number;        // la da migrate() en boot/harness (el núcleo no ve src/data)
+  appVersion?: string;           // se escribe en los respaldos; boot la toma de package.json (define de Vite)
+  backupAutoCopy?: AutoCopySink; // copia previa a restaurar (boot: createRestoreCopySink() → IndexedDB);
+                                 // sin él, la copia queda dentro de la propia base (sys.backup.autoCopy)
+  pbkdf2Iterations?: number;     // contraseña local y respaldos cifrados; 600 000 por defecto, 1 000 en el arnés
 }
 export function createCuadra(deps: CuadraDeps): Cuadra;
 
@@ -669,10 +673,11 @@ export interface Cuadra {
   readonly reports: ReportsService;
   readonly views: ViewsService;
   readonly audit: AuditService;
+  readonly auth: AuthService;          // inicio de sesión local (3.5, "Inicio de sesión")
   readonly settings: SettingsService;
   readonly templates: TemplatesService;
   readonly backup: BackupService;
-  readonly importCsv: ImportCsvService;
+  readonly importCsv: ImportCsvService;  // CSV y Excel (.xlsx): el nombre se conserva por compatibilidad
   readonly demo: DemoService;
   /** Se emite tras cada COMMIT con las tablas tocadas. La UI invalida consultas con esto. */
   subscribe(listener: (e: ChangeEvent) => void): () => void;
@@ -684,7 +689,8 @@ export interface Cuadra {
 // src/app/boot.ts (shell) — único sitio que conoce adaptadores. Corre fuera de React (main.tsx) para que
 // StrictMode no pida el candado dos veces; informa por onState: loading | blocked(takeOver) | ready | released(reopen) | error.
 const db = await openDatabase({ onBlocked, onReleaseRequested, onPersistError });  // src/data/index.ts → OpenedDatabase
-const cuadra = createCuadra({ driver: db, locale: 'es-DO', schemaVersion: db.schema.to });
+const cuadra = createCuadra({ driver: db, locale: 'es-DO', schemaVersion: db.schema.to,
+  appVersion: import.meta.env.VITE_APP_VERSION, backupAutoCopy: createRestoreCopySink() });
 // <App cuadra info={{ storage: db.storage, schema: db.schema, … }}/> → <CuadraProvider> (una QueryClient por fachada)
 ```
 
@@ -694,6 +700,7 @@ export async function createTestCuadra(opts?: { today?: IsoDate; seed?: number }
   cuadra: Cuadra; driver: SqlDriver; clock: FixedClock; ids: SeqIdGen;
 }>;
 // node:sqlite ':memory:' + migrate() + FixedClock('2026-06-15T12:00:00Z') + ids deterministas
+// + pbkdf2Iterations: 1 000 (las pruebas de contraseña y respaldo cifrado van rápidas)
 ```
 
 ### 3.2 Tipos de dominio
@@ -804,7 +811,15 @@ export type ErrorCode =
   | 'currency_locked' | 'confirmation_mismatch' | 'sqlite_too_old'
   | 'seq_not_reserved' | 'immutable_column' | 'delete_forbidden' | 'audit_append_only'
   | 'seq_decrease' | 'options_require_list_field'   // los lanzan triggers de 001_init.sql
-  | 'invalid_recipe' | 'not_implemented';           // receta inválida; stub de servicio
+  | 'invalid_recipe'                                // receta de vista o de plantilla inválida
+  // Oleada 2: estructura, ajustes y plantillas
+  | 'name_required' | 'template_invalid' | 'invalid_currency' | 'invalid_setting' | 'merge_different_field'
+  // Oleada 2: respaldo cifrado e inicio de sesión local
+  | 'password_required' | 'wrong_password' | 'wrong_recovery_key' | 'too_many_attempts'
+  | 'auth_not_enabled' | 'auth_already_enabled' | 'auth_locked' | 'password_too_short' | 'password_too_long'
+  | 'profile_name_required' | 'invalid_auto_lock' | 'crypto_unavailable';
+// 'not_implemented' (stubs de la Oleada 1) ya no existe: todos los servicios están implementados.
+// Cada código tiene texto en src/i18n/es/errors.ts (prueba en core/errors.test.ts).
 
 export class DomainError extends Error {
   constructor(readonly code: ErrorCode, readonly details?: Record<string, unknown>) { super(code); }
@@ -1104,7 +1119,15 @@ export interface QueriesService {
     negativeAccounts: AccountWithBalance[]; isEmpty: boolean;
     backup: { lastVerifiedAt: Timestamp | null; reminderDays: number; overdue: boolean };
   }>;
+  /** Panel de escritorio completo en una llamada (4 sentencias en una transacción de lectura). */
+  dashboard(workspaceId: Id, opts?: DashboardOptions): Promise<DashboardData>;
 }
+// DashboardOptions: { period?, months? (1–60, 12), seriesUnit? ('day'|'week'|'month'), breakdown?: GroupBy,
+//   measure? ('in'|'out'|'net'), topLimit? (5), recentLimit? (8) }
+// DashboardData: saldo y KPIs del periodo y del anterior, flujo mensual, series por cuenta, reparto con
+//   comparación, top de categorías y contactos, attention { negativeAccounts, unbalancedBatches, backup },
+//   recent. Tipos exactos en src/core/services/queries.ts; la fachada exporta además groupFilter() (clic en
+//   una barra o categoría → TxFilter) y previousRange().
 
 // ── Informes ───────────────────────────────────────────────────────────
 export interface StatementLine {
@@ -1202,43 +1225,64 @@ export interface SettingsService {
 }
 
 // ── Plantillas ─────────────────────────────────────────────────────────
+export type TemplateSource = string /* id empaquetado */ | TemplateFile /* archivo importado */;
+export interface ApplyTemplateInput { name: string; ownerName?: string; currency?: Currency; color?: string;
+  openingBalances?: Record<string /* account key */, OpeningInput>; isDemo?: boolean }
 export interface TemplatesService {
   list(): TemplateFile[];                                    // síncrono: son datos empaquetados
-  preview(templateId: string): TemplatePreview;              // lo que se va a crear (Frappe Books)
-  apply(templateId: string, input: { name: string; ownerName?: string; currency: Currency;
-    openingBalances?: Record<string /* account key */, OpeningInput> }): Promise<Mutation<Workspace>>;
+  get(templateId: string): TemplateFile;                     // not_found si no existe
+  preview(template: TemplateSource): TemplatePreview;        // lo que se va a crear (Frappe Books)
+  apply(template: TemplateSource, input: ApplyTemplateInput): Promise<Mutation<Workspace>>;  // UNA acción template_apply
+  applyWithKeys(template: TemplateSource, input: ApplyTemplateInput): Promise<Mutation<AppliedTemplate>>; // + keyMap
+  validate(input: unknown): TemplateValidation;              // forma, claves y recetas; todas las incidencias a la vez
+  parse(json: string): TemplateValidation;                   // texto de un .cuadra-plantilla.json
+  exportFromWorkspace(workspaceId: Id, opts?: ExportTemplateOptions): Promise<TemplateFile>; // solo estructura
+  serialize(file: TemplateFile): { json: string; fileName: string };
 }
+// Formato versionado 'cuadra-template' v1 en src/templates/schema.ts (las cinco plantillas empaquetadas se
+// cargan allí porque core solo puede importar templates/schema). apply con forma inválida → template_invalid
+// (details.issues); si solo fallan recetas de vistas → invalid_recipe.
 
 // ── Respaldo ───────────────────────────────────────────────────────────
 export interface BackupService {
-  /** F-81/83/84: arma el archivo, lo vuelve a leer y compara checksum y conteos antes de devolverlo. */
-  export(opts: { scope: 'all' } | { scope: 'workspace'; workspaceId: Id }): Promise<{
-    file: BackupFile; json: string; bytes: number; verified: true; suggestedName: string }>;   // cuadra-2026-11-26.cuadra.json
+  /** F-81/83/84: arma el archivo, lo vuelve a leer y compara checksum y conteos antes de devolverlo.
+   *  Con password, `text` es el sobre cifrado (AES-256-GCM + PBKDF2, src/core/crypto.ts). */
+  export(opts: BackupScope & { password?: string }): Promise<{
+    file: BackupFile; json: string; text: string; bytes: number; encrypted: boolean; verified: true;
+    suggestedName: string }>;                                // cuadra-2026-11-26.cuadra.json
   /** La UI llama esto cuando el archivo ya se guardó/descargó. */
   markVerified(at?: Timestamp): Promise<void>;
-  inspect(json: string): Promise<BackupInspection>;          // sin escribir nada
-  /** F-87: reemplaza TODO. Antes guarda copia automática (exportBytes → IDB / app data). */
-  restoreAll(json: string, opts: { confirm: true }): Promise<{ workspaces: number; transactions: number }>;
+  /** Sin escribir nada. Cifrado sin contraseña → ok:false, encrypted:true, error:'password_required'. */
+  inspect(text: string, opts?: { password?: string }): Promise<BackupInspection>;
+  /** F-87: reemplaza TODO. Antes guarda copia automática (destino externo o, si no hay, dentro de la BD). */
+  restoreAll(text: string, opts: { confirm: true; password?: string }): Promise<{ workspaces: number; transactions: number;
+    autoCopy: { name: string; storedIn: 'external' | 'database' } }>;
   /** F-88: un espacio del respaldo entra como espacio NUEVO, con ids nuevos. */
-  importWorkspace(json: string, sourceWorkspaceId: Id, opts?: { rename?: string }): Promise<Mutation<Workspace>>;
+  importWorkspace(text: string, sourceWorkspaceId: Id, opts?: { rename?: string; password?: string }): Promise<Mutation<Workspace>>;
+  lastAutoCopy(): Promise<{ name: string; createdAt: Timestamp; json: string } | null>;
 }
 export interface BackupInspection {
-  ok: boolean; error?: ErrorCode; formatVersion: number; schemaVersion: number; appVersion: string;
+  ok: boolean; error?: ErrorCode; encrypted: boolean; formatVersion: number; schemaVersion: number; appVersion: string;
   createdAt: Timestamp; scope: 'all' | 'workspace';
   workspaces: Array<{ id: Id; name: string; transactions: number; accounts: number }>;
+  counts: Partial<Record<BackupTable, number>>;
   needsUpgrade: boolean;
 }
 
-// ── Importación CSV ────────────────────────────────────────────────────
-export interface RawTable { headers: string[]; rows: string[][]; delimiter: string; encoding: 'utf-8' | 'latin1' }
-export type DateFormat = 'auto' | 'dd/MM/yyyy' | 'MM/dd/yyyy' | 'yyyy-MM-dd' | 'dd-MM-yyyy' | 'd/M/yy';
+// ── Importación CSV y Excel ────────────────────────────────────────────
+// La UI lee el .xlsx con read-excel-file y pasa las filas a fromRows(); el .csv con decode() + parse().
+export type Cell = string | number | boolean | Date | null | undefined;
+export interface RawTable { headers: string[]; rows: Cell[][]; delimiter?: string; encoding?: 'utf-8' | 'latin1' }
+export type DateFormat = 'auto' | 'dd/MM/yyyy' | 'MM/dd/yyyy' | 'yyyy-MM-dd' | 'dd-MM-yyyy' | 'd/M/yy' | 'excel_serial';
 export interface ColumnMapping {
   date: { column: number; format: DateFormat };
   amount:
     | { mode: 'signed'; column: number }                          // negativo = salida
     | { mode: 'split'; inColumn: number; outColumn: number }       // columnas Debe/Haber, Entrada/Salida
     | { mode: 'with_type'; column: number; typeColumn: number; inValues: string[] };
-  amountLocale: string;                                            // cómo vienen los números en el archivo
+  amountLocale: string | 'auto';                                   // cómo vienen los números en el archivo
+  account?: { column: number };                                    // columna de cuenta (por nombre)
+  optionMap?: Record<Id /* fieldId */, Record<string, Id>>;        // alias editables texto → opción
   description: { column: number } | { fixed: string };
   notes?: { column: number };
   fields: Record<Id, { column: number }>;                          // listas: el texto se casa con opciones
@@ -1257,23 +1301,62 @@ export interface ImportPreview {
   accountHasOpening: boolean;
 }
 export interface ImportCsvService {
-  parse(text: string, opts?: { delimiter?: string }): RawTable;            // papaparse, detecta delimitador
+  parse(text: string, opts?: { delimiter?: string }): RawTable;            // papaparse, detecta delimitador y BOM
+  decode(bytes: Uint8Array): { text: string; encoding: 'utf-8' | 'latin1' }; // UTF-8 o windows-1252
+  fromRows(rows: readonly (readonly Cell[])[], opts?: { headerRow?: number }): RawTable;  // filas de Excel
+  detectColumns(raw: RawTable, fields?: Field[]): ColumnGuess[];
   suggestMapping(raw: RawTable, fields: Field[]): Partial<ColumnMapping>;   // "Fecha", "Monto", "Débito", "Concepto"...
   preview(workspaceId: Id, accountId: Id, raw: RawTable, mapping: ColumnMapping,
-          opts?: { fileTotalMinor?: Minor }): Promise<ImportPreview & { fileTotalDifferenceMinor: Minor | null }>;
+          opts?: { fileTotalMinor?: Minor; fileTotalInMinor?: Minor; fileTotalOutMinor?: Minor }): Promise<ImportPreviewResult>;
+  // ImportPreviewResult = ImportPreview + fileTotals, fileTotalDifference, resolved (formato y locale elegidos);
+  // cada fila gana opening, pendingOptions y duplicateOf; newOptions trae `similar`.
   /** Nada se guarda antes de esto. Crea opciones nuevas + un lote 'import'. Nunca toca movimientos existentes. */
   commit(workspaceId: Id, accountId: Id, preview: ImportPreview,
          opts: { include: number[] /* índices de filas */; fileName: string; mapping: ColumnMapping }):
     Promise<Mutation<{ batchId: Id; imported: number; skipped: number; createdOptions: number }>>;
   /** CSV modelo con las columnas de los campos del espacio (Frappe Books). */
   templateCsv(workspaceId: Id): Promise<string>;
+  /** Lo mismo como tabla, para escribir un .xlsx con write-excel-file. */
+  templateTable(workspaceId: Id): Promise<{ headers: string[]; rows: string[][] }>;
 }
+// commit crea las opciones nuevas en una transacción propia (sin acción) y luego UN createMany con lote
+// 'import' y acción 'import'; si createMany falla, borra esas opciones (nadie las usa). El aviso far_date
+// solo salta a más de 90 días en el futuro o más de 10 años atrás.
+
+// ── Inicio de sesión local ─────────────────────────────────────────────
+// Persistencia en settings (scope ''), claves auth.*: solo hashes PBKDF2 con sal, nunca la contraseña ni la
+// clave de recuperación. La sesión vive en memoria: un reinicio arranca bloqueado. La base local NO se cifra.
+export interface AuthStatus { enabled: boolean; locked: boolean; hasRecoveryKey: boolean; autoLockMinutes: number;
+  profileName: string | null; failedAttempts: number; retryAt: Timestamp | null; passwordChangedAt: Timestamp | null }
+export interface AuthService {
+  status(): Promise<AuthStatus>;                 // relee la base y aplica el auto-bloqueo
+  snapshot(): AuthStatus | null;                 // síncrono, para useSyncExternalStore
+  setup(input: { profileName: string; password: string }): Promise<{ recoveryKey: string }>; // se muestra UNA vez
+  unlock(password: string): Promise<void>;       // 5 intentos libres; luego 30 s que se doblan hasta 15 min
+  unlockWithRecoveryKey(recoveryKey: string, newPassword: string): Promise<void>;
+  lock(): void;
+  changePassword(current: string, next: string): Promise<void>;
+  regenerateRecoveryKey(password: string): Promise<{ recoveryKey: string }>;
+  disable(password: string): Promise<void>;
+  setAutoLock(minutes: number): Promise<void>;   // 0 = nunca; 1–1440; 5 por defecto
+  touch(): void;                                 // la UI lo llama con cada interacción
+  checkIdle(): boolean;                          // la UI lo llama cada ~15 s y en visibilitychange
+  encrypt(plaintext: string): Promise<EncryptedEnvelope>;   // con la contraseña de la sesión abierta
+  decrypt(envelope: EncryptedEnvelope): Promise<string>;
+  subscribe(listener: (s: AuthStatus) => void): () => void;
+}
+// Sin crypto.subtle (http://ip-de-la-red) todo lanza crypto_unavailable; la UI usa isCryptoAvailable().
+// Respaldo: las claves auth.* no salen nunca y restaurar conserva las del equipo (como sys.*).
 
 // ── Datos de ejemplo ───────────────────────────────────────────────────
+export type DemoProfileId = 'colmado' | 'despacho' | 'personal';
 export interface DemoService {
-  profiles(): Array<{ id: 'colmado' | 'despacho'; name: string; description: string }>;
-  /** Crea un espacio nuevo is_demo=1 con ~14 meses que terminan en clock.today(). */
-  seed(profile: 'colmado' | 'despacho', opts?: { seed?: number; months?: number }): Promise<Mutation<Workspace>>;
+  profiles(): Array<{ id: DemoProfileId; name: string; description: string; templateId: string }>;
+  /** Plan puro, sin escribir (determinismo y vista previa). */
+  plan(profile: DemoProfileId, opts?: { seed?: number; months?: number; anchor?: IsoDate }): DemoPlan;
+  /** Crea un espacio nuevo is_demo=1 con ~14 meses que terminan en clock.today(). Avisos: saldo negativo FINAL. */
+  seed(profile: DemoProfileId, opts?: { seed?: number; months?: number }): Promise<Mutation<{
+    workspace: Workspace; transactions: number; batches: number; steps: number }>>;
 }
 ```
 
@@ -1320,10 +1403,39 @@ export type BackupTable = 'workspaces' | 'accounts' | 'batches' | 'fields' | 'fi
 ```
 
 - **Tablas, no objetos de dominio:** el respaldo es un volcado fiel (incluye `seq`, `next_seq`, historial). Legible con cualquier visor JSON (espíritu de Paisa/Ledger).
-- **Excluido:** `schema_migrations` y las claves `sys.*` de `settings`.
+- **Excluido:** `schema_migrations` y las claves `sys.*` y `auth.*` de `settings` (estado interno y hashes de la contraseña del equipo). Restaurar conserva las de la instalación: un respaldo nunca cambia la contraseña local.
+- **Cifrado opcional:** con contraseña, el archivo es un sobre `EncryptedEnvelope` (AES-256-GCM, clave PBKDF2-SHA256, sal e IV nuevos por archivo, cabecera autenticada). Un respaldo hecho antes de cambiar la contraseña se abre solo con la contraseña con la que se hizo.
 - **Versiones:** `schemaVersion > actual` → `backup_from_newer_version` ("actualiza Cuadra"). `schemaVersion < actual` → se aplican en memoria los *upgraders* `src/core/services/backup-upgrades/<n>.ts` (uno por cada migración que cambie forma) antes de insertar. 001 no necesita ninguno.
-- **Restaurar todo:** `exportBytes()` → copia automática → transacción: `INSERT sys.maintenance` → `DELETE` de todas las tablas en orden inverso de FK → `INSERT` en orden de FK con `runMany` → `DELETE sys.maintenance` → acción `backup_restore` en historial → `PRAGMA foreign_key_check` vacío o ROLLBACK.
+- **Restaurar todo:** `exportBytes()` → copia automática (destino `CuadraDeps.backupAutoCopy`; si falla, no se restaura; sin destino, dentro de la base en `sys.backup.autoCopy`) → transacción: `INSERT sys.maintenance` → `DELETE` de todas las tablas en orden inverso de FK → `INSERT` en orden de FK con `runMany` → `DELETE sys.maintenance` → acción `backup_restore` en historial → `PRAGMA foreign_key_check` vacío o ROLLBACK.
 - **Importar un espacio:** se genera un mapa `idViejo → idNuevo` para todas las filas del espacio (incluidos `transfer_group_id`, `merged_into_id`, `params/meta` que contengan ids conocidos) y se inserta en modo mantenimiento (para conservar `seq`).
+
+### 3.8 Notas de la Oleada 2 (donde el código cambió el contrato)
+
+**Migración 002: no se hizo.** `createMany` con 5 000 borradores tarda 415–494 ms en Node (la referencia mínima que impone el trigger, reservar e insertar fila a fila, es 304 ms). Queda para la Oleada 4 medirlo en el navegador real (OPFS); si pasa de ~1,5 s, el diseño propuesto para la 002 es que el trigger exija `seq = MAX(seq) + 1` y `seq < next_seq`, reservar un bloque por cuenta con un solo UPDATE e insertar con `runMany`. Tampoco se añadió el índice de cobertura `tx_ws_agg` que propuso 2C (baja el cubo del panel de ~15 a ~10 ms en Node): necesitaría esa migración.
+
+**Movimientos (2A).**
+- Crear con un campo u opción inactivos es error duro (`field_inactive`, `option_inactive`); editar conserva los valores que no cambian y vaciar siempre se permite. Editar un anulado → `already_voided`; `duplicate` de un saldo inicial → `opening_exists`.
+- `far_date.days` lleva signo (positivo = futuro). `createMany` solo avisa del saldo final negativo por cuenta; los avisos por fila salen en `batches.capture` o con `computeWarnings` (validation.ts).
+- `createMany().ids` trae un id por borrador en orden (transferencia → su lado de salida). `insertBatch(ctx, input)` es `createMany` sin transacción ni historial, para componer un guardado con UNA acción propia (importación, demo).
+- Historial: las transferencias son `entityType 'transfer'` con el id del grupo; un alta lleva una línea `'*'` con la instantánea; anular/restaurar un lote escribe una línea `status` por fila; `history`/`forEntity` van de lo más reciente a lo más antiguo e incluyen la acción que creó el lote. `setOpening` sobre un saldo inicial anulado lo edita y restaura en la misma acción.
+- Reutilizar el último `seq` choca con UNIQUE (SqlError), no con el trigger; los no reservados o saltados dan `seq_not_reserved`.
+
+**Estructura (2B).** Moneda por espacio con decimales bloqueados si hay movimientos (`currency_locked`). `workspaces.purge(id, nombreExacto)` borra en modo mantenimiento y deja una acción en el historial general. Reordenar y cambiar ajustes no escriben historial (solo evento); desactivar o borrar campos/opciones → `config`; renombrar → `edit` con `audit.*.rename`. `insertOpeningTx` (accounts.ts) crea saldos iniciales al crear cuentas y aplicar plantillas dentro de la transacción del llamador.
+
+**Consultas e informes (2C).** `ReportDocument` gana `recipe`, `accounts` y `fields` (se pinta y exporta sin más consultas). En `Totals` los montos solo suman activos; `count` cuenta el conjunto pedido y `voidedCount` los anulados que cumplen el resto del filtro. Los grupos de un resumen solo cuentan entradas y salidas. En un campo sí/no, "sin valor" cuenta como "No". Vistas: nombre único por tipo sin distinguir mayúsculas (`duplicate_label`), nombre vacío → `name_required`, borrar = acción `archive` con `audit.view.remove`. Cursor o filtro con forma inválida (incluidas fechas inexistentes) → `invalid_recipe`. Exportación tabular en `src/core/export/tabular.ts` (`transactionsToSheet`, `summaryToSheet`, `auditToSheet`, `reportToSheets`, `sheetToRows`; columnas con `key` y tipo `'number'`).
+
+**Respaldo e importación (2D).** Ver 3.5 y 3.7. `APP_VERSION` del núcleo es el valor por defecto; la cáscara pasa la real. Upgraders en `services/backup-upgrades/` (ninguno registrado: la 001 no lo necesita). `suggestMapping` toma Débito/Cargo/Retiro como salida y Crédito/Abono/Depósito como entrada (extracto bancario), pero Debe como entrada y Haber como salida (libro de caja); la UI debe dejar cambiarlo.
+
+**Inicio de sesión (2F).** Ver `AuthService` en 3.5. Contraseña de 8 a 1 024 caracteres (normalizada a NFC); la clave de recuperación (6 grupos de 4 símbolos Crockford, el último de control) sigue sirviendo tras usarla; los intentos fallidos no van al historial; si otra vía reescribe `auth.*`, el servicio relee y bloquea.
+
+**Revisión adversarial (cierre de la Oleada 2).** Pruebas en `src/test/adversarial.test.ts` y `src/test/identity.random.test.ts` (modelo independiente con BigInt sobre operaciones aleatorias deterministas). Cambios de contrato que salieron de ahí:
+- *Techo de volumen por espacio:* la suma de `amount_minor` de todos los movimientos del espacio (activos y anulados; una transferencia cuenta sus dos lados) no pasa de `MAX_MINOR` (unos 90 billones de pesos). Lo comprueban `assertWorkspaceCapacity` (validation.ts) al crear y al editar al alza, y `insertOpeningTx`; si no cabe → `invalid_amount` con `details.reason = 'workspace_total_too_large'`. Así ningún saldo, total ni grupo sale de los enteros seguros (antes, dos montos cercanos a 2^53 rompían `Money.add` con un `RangeError` y dejaban el panel sin leer).
+- *Captura e importación:* la fila que haría pasar la suma del lote o del archivo de `MAX_MINOR` sale como `too_large` (error de fila), no como `RangeError`.
+- *Restaurar e importar un espacio* comprueban, antes de salir del modo mantenimiento, I-7 (`seq` 1..n y `next_seq = n + 1`), I-9 (transferencias de dos lados coherentes), fechas reales (`date(x) = x`) y el techo de volumen; si algo falla → `backup_invalid` con `details.reason = 'integrity'` y ROLLBACK. El checksum no es una firma: un archivo editado a mano con el checksum recalculado llegaba a dejar cuentas inservibles.
+- *CSV:* `sheetToRows` antepone `'` a las celdas de texto que empiezan por `= + - @`, tabulador o retorno (inyección de fórmulas); el dinero sale aparte como decimal canónico.
+- *Fechas de saldo inicial:* `validateOpening` usa `isStorableDate` (años 1000–2999), como el resto.
+
+**Mensajes del historial.** Cada acción guarda `message` (clave i18n) y `params`; los textos están en `src/i18n/es/audit.ts` (y `auth.audit.*` en `auth.ts`). Los montos viajan en unidad menor y la UI los formatea con `Money.format`; una prueba comprueba que toda clave `audit.*` del núcleo tiene texto.
 
 ---
 
@@ -1492,6 +1604,8 @@ Ningún servicio se da por terminado sin sus pruebas en verde. Todas usan `creat
 104. `misma semilla y misma fecha ancla → mismo plan (hash idéntico)`
 105. `colmado cubre 14 meses, tiene transferencias, lotes y anulados, y cumple I-1..I-9`
 
+Además (Oleada 2): las demás pruebas de `demo.test.ts` (cuentas negativa y archivada, campos fusionados/renombrados/desactivados, historial fechado, vistas y panel, despacho y personal con los cinco tipos de campo e importación), `core/services/structure-errors.test.ts` (códigos nuevos), `i18n/audit.test.ts` (textos del historial), `data/restoreCopies.test.ts` (copia previa a restaurar), `app/data/auth.test.ts` (auto-bloqueo) y la de `backup.test.ts` que comprueba que `auth.*` no sale en el respaldo.
+
 **`src/test/architecture.test.ts`**
 106. `core no importa react, DOM, node:* ni otras capas`
 107. `ninguna feature importa otra feature ni app/shell`
@@ -1538,16 +1652,30 @@ Configuración del `QueryClient`: `staleTime: Infinity` (los datos solo cambian 
 Hooks compartidos (`src/app/data/hooks.ts`, dueños: shell), los únicos que varias features usan:
 
 ```ts
+// Las definiciones puras (clave, tablas, llamada) viven en src/app/data/queryDefs.ts; clave =
+// [nombre, workspaceId | undefined, ...parámetros] (undefined = consulta global, la afecta cualquier espacio).
 export function useWorkspaceId(): Id;                       // de la ruta /e/:wsId
-export function useWorkspace(): UseQueryResult<Workspace>;
+export function useOptionalWorkspaceId(): Id | undefined;
 export function useWorkspaces(opts?: { includeArchived?: boolean }): UseQueryResult<WorkspaceSummary[]>;
-export function useAccounts(opts?: { includeArchived?: boolean }): UseQueryResult<AccountWithBalance[]>;
+export function useWorkspace(id?: Id): UseQueryResult<Workspace>;
+export function useAccounts(opts?: { includeArchived?: boolean; asOf?: IsoDate }): UseQueryResult<AccountWithBalance[]>;
+export function useBalances(opts?: { asOf?: IsoDate }); export function useBalanceSeries(input);
 export function useFields(opts?: { includeInactive?: boolean }): UseQueryResult<Field[]>;
-export function useFormSchema(kind: 'income' | 'expense' | 'transfer'): UseQueryResult<FormSchema>;
-export function useSavedViews<K extends ViewRecipe['kind']>(kind: K): UseQueryResult<SavedView<K>[]>;
+export function useFieldOptions(fieldId, opts?); export function useFormSchema(kind: 'income' | 'expense' | 'transfer');
+export function useTransactions(filter, page?); export function useInfiniteTransactions(filter, opts?);
+export function useTransactionsByDay(filter, page?); export function useTransaction(id); export function useTransactionHistory(id);
+export function useTotals(filter); export function useSummary(input); export function useHome(month?);
+export function useDashboard(opts?: DashboardOptions): UseQueryResult<DashboardData>;   // conserva el anterior al cambiar
+export function useViews<K extends ViewRecipe['kind']>(kind: K): UseQueryResult<SavedView<K>[]>;
+export function useAudit(input?); export function useWorkspaceSetting(key);
 export function useSetting<K extends keyof SettingsMap>(key: K): [SettingsMap[K] | undefined, (v: SettingsMap[K]) => Promise<void>];
 export function useMoneyFormat(): (minor: Minor, o?: { sign?: 'auto' | 'always'; compact?: boolean }) => string;
 export function useMoneyParse(): (s: string, o?: { allowNegative?: boolean }) => Result<Minor, MoneyParseError>;
+export function useBootInfo(): BootInfo;                    // almacenamiento, esquema, versión de SQLite
+export function useAuth(): { ready; enabled; locked; mustLock; status: AuthStatus | null;
+  unlock(password): Promise<void>; lock(): void; refresh(): Promise<void> };   // useSyncExternalStore sobre cuadra.auth
+// src/app/data/auth.ts también exporta attachIdleLock(auth): el pulso del auto-bloqueo (touch con cada
+// interacción, checkIdle cada 15 s y en visibilitychange). Lo engancha UNA vez el shell (LockGate).
 ```
 
 Optimismo: no hace falta. Una escritura local tarda < 10 ms; la UI espera la promesa y anima el resultado.
@@ -1618,6 +1746,15 @@ export const feature: FeatureModule = {
 
 Las tarjetas del inicio (saldo, flujo mensual, cuentas, recordatorio de respaldo, cuentas en negativo) las aportan `home`, `insights`, `accounts` y `backup` por el registro; `home` solo las pinta en el orden guardado en `home.cards`. Así el "resumen configurable" del inicio crece sin tocar `home`.
 
+**Añadidos de la Oleada 2 al registro** (`src/app/registry/types.ts`, cuya cabecera trae un ejemplo completo):
+
+- `NavEntry.group` y `NavEntry.goKey` (atajo `g` + letra).
+- `lockScreen?: LockScreenDef` en `FeatureModule` (`{ lazy: () => import(...) }` con `Component(props: LockScreenProps)`). Solo la feature `auth` debería registrarla; el shell (`LockGate`) la muestra a pantalla completa cuando `auth.mustLock`, oculta la app sin desmontarla y engancha el auto-bloqueo. Sin `lockScreen` registrada no se bloquea nada.
+- `InspectorPanel` (`app/registry/inspector`): portal al inspector fijo desde 1280 px, hoja lateral o inferior en anchos menores. `useSheet()` (`app/registry/sheet`) da `close` y `setDirty` a las rutas `presentation: 'sheet'`.
+- `findRegistryProblems` avisa en desarrollo de ids o atajos repetidos.
+
+Atajos del shell: `Ctrl+K` paleta, `n` anotar, `e`/`s`/`t` entrada/salida/transferencia, `g` + letra para ir, `/` buscar, `?` ayuda. No actúan al escribir ni con un diálogo modal abierto. Las features no renderizan `<main>` (lo pone el shell) ni usan `position: fixed` dentro de sus páginas.
+
 ### 5.3 Enrutado
 
 `createHashRouter` (react-router 8.5.3, modo librería): funciona en GitHub Pages en subruta y en Tauri sin configurar servidor. `src/app/router.tsx` construye el árbol a partir de `features`:
@@ -1651,6 +1788,8 @@ Filtros activos y periodo van en la query string (`?periodo=this_month&cuenta=�
 
 El shell también resuelve: pantalla de arranque, `TabLockScreen` ("Cuadra está abierta en otra pestaña · Usar aquí"), `UpdatePrompt` del service worker (`registerType: 'prompt'`), `BootError` (sin OPFS ni IndexedDB → modo solo memoria con banner rojo "los datos no se guardarán").
 
+Ruta propia del shell: `/e/:wsId/mas` (página «Más», destino de la barra inferior móvil, que tiene 2 destinos primarios + «Más» + la pastilla Anotar, según DESIGN §8.2).
+
 ### 5.4 i18n y formato regional
 
 - Diccionarios por espacio de nombres en `src/i18n/es/<ns>.ts`, cada uno exportando un objeto plano `as const`. `src/i18n/es/index.ts` los junta con `import.meta.glob`, así cada agente edita solo su archivo.
@@ -1671,7 +1810,9 @@ export function mulberry32(seed: number): () => number;     // [0,1)
 export interface Rng { next(): number; int(min: number, max: number): number; pick<T>(xs: readonly T[]): T;
   chance(p: number): boolean; normalMinor(meanMinor: Minor, sdMinor: Minor, roundTo: Minor): Minor }
 
-// src/core/demo/seed.ts
+// src/core/demo/plan.ts (tipos, hashPlan, calendario) · index.ts (planDemo, DEMO_PROFILES) · colmado|despacho|personal.ts
+// Forma real: DemoPlan gana profile, start/anchor, extraAccounts, extraFields, extraOptions, steps (la historia)
+// y backupVerifiedDaysAgo; los anulados van como pasos 'void' en vez de `voids`. Esquema de abajo = idea original.
 export interface DemoPlan {
   templateId: 'negocio' | 'despacho';
   workspace: { name: string; ownerName: string };
@@ -1683,12 +1824,20 @@ export interface DemoPlan {
     | { t: 'capture'; account: string; kind: 'income' | 'expense'; date: IsoDate; label: string; controlTotalMinor: Minor; rows: Array<{ amountMinor: Minor; description: string; values: Record<string, string> }> }>;
   voids: Array<{ index: number; reason: string }>;
 }
-export function planDemo(profile: 'colmado' | 'despacho', opts: { seed: number; anchor: IsoDate; months: number }): DemoPlan;
+export function planDemo(profile: 'colmado' | 'despacho' | 'personal', opts: { seed?: number; anchor: IsoDate; months?: number }): DemoPlan;
 export function hashPlan(plan: DemoPlan): string;           // para la prueba de determinismo
 // DemoService.seed = templates.apply + traducir claves a ids + transactions.createMany (UNA acción demo_seed)
 ```
 
 Reglas comunes: semilla fija `20261126`; ancla = `clock.today()` (los datos siempre terminan "hoy" pero son idénticos para la misma ancla); 14 meses hacia atrás; montos redondeados a lo creíble (RD$ 5 en ventas, RD$ 50 en gastos); estacionalidad de diciembre (+35 %) y de inicio de clases en agosto; nombres de comercios y contactos **ficticios y genéricos** (nada tomado de los documentos de origen). Objetivo: 1 800–2 600 movimientos en total, para que listas, filtros y gráficas se vean vivos sin ralentizar el worker.
+
+**Implementación (Oleada 2).** `src/core/demo/` (prng, plan, builder y un archivo por perfil) produce un `DemoPlan` puro; `services/demo.ts` lo escribe en tres tiempos:
+
+1. `templates.applyWithKeys` (acción `template_apply`) crea el espacio `is_demo` con cuentas, campos, vistas y saldos iniciales, fechado el primer día del plan.
+2. UNA unidad de trabajo con UNA acción `demo_seed`: cuentas, campos y opciones extra y todos los movimientos con `insertBatch` (un lote `capture` por día de ventas, los lotes `import` y un lote `demo` por día con el resto, para que el `seq` de cada cuenta siga el orden de las fechas y `recorded_at` caiga ese día).
+3. La historia (ediciones, anulaciones con motivo, una restauración, lote "Día duplicado" anulado, fusión de opciones, renombre, campo desactivado, cuenta archivada) con los servicios públicos y un reloj guionizado: cada acción de historial lleva la fecha en que ocurre en el plan.
+
+Si algo falla tras crear el espacio, se borra entero (`workspaces.purge`). Además del colmado y el despacho hay un tercer perfil, **"Finanzas de la casa"** (plantilla Finanzas personales: salario quincenal, ahorro, tarjeta, un estado de cuenta importado y un viaje anotado en la tabla de captura). Volúmenes con ancla 2026-11-27: colmado ≈ 2 400 movimientos, despacho ≈ 620, personal ≈ 510 (el rango 1 800–2 600 se cumple por perfil grande, no en total). Si no había respaldo verificado, se registra uno de hace 41 días para que el recordatorio salga vencido. Solo las tarjetas pasan por saldo negativo; caja y bancos nunca (prueba). Tiempo en Node: colmado ≈ 0,6–0,9 s.
 
 ### 6.1 Perfil "Colmado La Esquina" (plantilla Negocio pequeño)
 
@@ -1749,6 +1898,8 @@ Orden interno: 1B publica `ports.ts` y `types.ts` en la primera hora; 1C y 1D se
 | **2E Hooks compartidos y shell real** | Sonnet medium | `src/app/**` | `hooks.ts` de 5.1, `boot.ts` real con `openDatabase`, `TabLockScreen`, `UpdatePrompt`, `BootError`, selector de espacio |
 
 Dependencias: 2A antes de cerrar 2D (demo e importación usan `createMany`). 2B y 2C son independientes de 2A salvo por el harness. El orquestador integra en este orden: 2B → 2A → 2C → 2D.
+
+Cierre real de la Oleada 2: se sumó **2F Login local y cifrado** (`core/crypto.ts`, `core/services/auth.ts`, `i18n/es/auth.ts`). Los datos de ejemplo (`core/demo/**`, `services/demo.ts`) los terminó el integrador. Ningún servicio queda en `not_implemented` (el código se retiró de `ErrorCode`).
 
 ### Oleada 3 — Pantallas por área (paralelo, 7 agentes)
 

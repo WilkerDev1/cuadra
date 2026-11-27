@@ -6,7 +6,8 @@ import { defaultIdGen } from './ids';
 import type { Clock, IdGen, SqlDriver, SqlDriverInfo } from './ports';
 import { createAccountsService, type AccountsService } from './services/accounts';
 import { createAuditService, createAuditWriter, type AuditService } from './services/audit';
-import { createBackupService, type BackupService } from './services/backup';
+import { createAuthService, type AuthService } from './services/auth';
+import { createBackupService, type AutoCopySink, type BackupService } from './services/backup';
 import { createBatchesService, type BatchesService } from './services/batches';
 import { createDemoService, type DemoService } from './services/demo';
 import { createFieldsService, type FieldsService } from './services/fields';
@@ -27,6 +28,18 @@ export interface CuadraDeps {
   locale?: string; // 'es-DO'
   /** Versión de esquema tras migrar (la da migrate() en boot/harness). Por defecto 0 = desconocida. */
   schemaVersion?: number;
+  /** Versión de la app que se escribe en los respaldos (la cáscara pasa la de package.json). */
+  appVersion?: string;
+  /**
+   * Destino de la copia automática previa a restaurar un respaldo (IndexedDB en web, datos de la app en
+   * Tauri). Sin él, la copia se guarda dentro de la propia base (`sys.backup.autoCopy`).
+   */
+  backupAutoCopy?: AutoCopySink;
+  /**
+   * Iteraciones PBKDF2 de la contraseña local y de los respaldos cifrados. Por defecto 600 000 (OWASP);
+   * el arnés de pruebas usa 1 000. Nunca bajarlo en producción.
+   */
+  pbkdf2Iterations?: number;
 }
 
 export interface Cuadra {
@@ -39,6 +52,8 @@ export interface Cuadra {
   readonly reports: ReportsService;
   readonly views: ViewsService;
   readonly audit: AuditService;
+  /** Inicio de sesión local: contraseña opcional, clave de recuperación, bloqueo automático. */
+  readonly auth: AuthService;
   readonly settings: SettingsService;
   readonly templates: TemplatesService;
   readonly backup: BackupService;
@@ -61,6 +76,7 @@ export function createCuadra(deps: CuadraDeps): Cuadra {
     audit: createAuditWriter({ clock, ids }),
     locale: deps.locale ?? 'es-DO',
   };
+  const iterations = deps.pbkdf2Iterations;
   return {
     workspaces: createWorkspacesService(core),
     accounts: createAccountsService(core),
@@ -71,9 +87,15 @@ export function createCuadra(deps: CuadraDeps): Cuadra {
     reports: createReportsService(core),
     views: createViewsService(core),
     audit: createAuditService(core),
+    auth: createAuthService(core, iterations === undefined ? {} : { hashIterations: iterations, encryptionIterations: iterations }),
     settings: createSettingsService(core),
     templates: createTemplatesService(core),
-    backup: createBackupService(core),
+    backup: createBackupService(core, {
+      ...(deps.appVersion === undefined ? {} : { appVersion: deps.appVersion }),
+      ...(deps.backupAutoCopy === undefined ? {} : { autoCopy: deps.backupAutoCopy }),
+      ...(deps.schemaVersion === undefined || deps.schemaVersion === 0 ? {} : { schemaVersion: deps.schemaVersion }),
+      ...(iterations === undefined ? {} : { encryption: { iterations } }),
+    }),
     importCsv: createImportCsvService(core),
     demo: createDemoService(core),
     subscribe: (listener) => events.subscribe(listener),
@@ -121,25 +143,89 @@ export {
   type TemplateKeyMap,
 } from './recipes';
 
+export {
+  isCryptoAvailable,
+  isEncryptedEnvelope,
+  isValidRecoveryKey,
+  normalizeRecoveryKey,
+  type EncryptedEnvelope,
+} from './crypto';
+export {
+  auditToSheet,
+  reportToSheets,
+  sheetToRows,
+  summaryToSheet,
+  transactionsToSheet,
+  type Cell as SheetCell,
+  type ColumnType,
+  type Sheet,
+  type SheetColumn,
+  type Translate,
+} from './export/tabular';
+export { groupFilter, previousRange } from './services/queries';
+export { serializeTemplate, templateFileName } from '../templates/schema';
+export { DEMO_PROFILES, hashPlan, type DemoPlan } from './demo';
+
 export type { AccountsService, OpeningInput } from './services/accounts';
 export type { AuditService } from './services/audit';
-export type { BackupFile, BackupInspection, BackupService, BackupTable } from './services/backup';
+export type { AuthErrorCode, AuthService, AuthStatus } from './services/auth';
+export type {
+  AutoCopy,
+  AutoCopySink,
+  BackupExport,
+  BackupFile,
+  BackupInspection,
+  BackupScope,
+  BackupService,
+  BackupServiceOptions,
+  BackupTable,
+} from './services/backup';
 export type { BatchesService, CaptureInput, CaptureResult, CaptureRow, CaptureRowError } from './services/batches';
-export type { DemoProfileId, DemoService } from './services/demo';
+export type { DemoProfile, DemoProfileId, DemoSeedResult, DemoService } from './services/demo';
 export type { FieldsService, FormSchema } from './services/fields';
 export type {
+  Cell,
+  ColumnGuess,
+  ColumnKind,
   ColumnMapping,
   DateFormat,
   ImportCsvService,
+  ImportIssue,
+  ImportOpening,
   ImportPreview,
+  ImportPreviewResult,
   ImportPreviewRow,
   ImportRowStatus,
+  ImportTotals,
   RawTable,
+  ResolvedDateFormat,
 } from './services/importCsv';
-export type { HomeData, QueriesService } from './services/queries';
+export type {
+  DashboardBreakdownGroup,
+  DashboardData,
+  DashboardOptions,
+  DashboardRange,
+  DashboardTopItem,
+  HomeData,
+  QueriesService,
+} from './services/queries';
 export type { ReportDocument, ReportRecipe, ReportsService } from './services/reports';
 export type { SettingsMap, SettingsService, WorkspaceSettingsMap } from './services/settings';
-export type { TemplateFile, TemplatePreview, TemplatesService } from './services/templates';
+export type {
+  AppliedTemplate,
+  ApplyTemplateInput,
+  ExportTemplateOptions,
+  TemplateAccount,
+  TemplateField,
+  TemplateFile,
+  TemplateIssue,
+  TemplateOption,
+  TemplatePreview,
+  TemplateSource,
+  TemplatesService,
+  TemplateValidation,
+  TemplateView,
+} from './services/templates';
 export type {
   CreateManyDraft,
   CreateManyInput,

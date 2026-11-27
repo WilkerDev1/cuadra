@@ -1,0 +1,218 @@
+{
+  "format": "cuadra-template",
+  "formatVersion": 1,
+  "id": "despacho",
+  "version": 1,
+  "name": "Despacho contable (un cliente)",
+  "description": "Para el contador independiente: un espacio por cliente, con banco operativo, tarjeta empresarial y caja chica, centro de costo, NCF, fecha de factura, horas facturadas e informes para entregar al cliente.",
+  "color": "tint-2",
+  "currency": { "code": "DOP", "minorDigits": 2, "symbol": "RD$" },
+  "accounts": [
+    { "key": "banco_operativo", "name": "Banco operativo", "type": "bank", "icon": "Landmark" },
+    { "key": "tarjeta_empresarial", "name": "Tarjeta empresarial", "type": "card", "icon": "CreditCard" },
+    { "key": "caja_chica", "name": "Caja chica", "type": "cash", "icon": "Wallet" }
+  ],
+  "fields": [
+    {
+      "key": "categoria",
+      "label": "Categoría",
+      "type": "list",
+      "role": "category",
+      "showInList": true,
+      "options": [
+        { "key": "servicios", "label": "Venta de servicios", "appliesTo": "in", "color": "tint-1" },
+        { "key": "bienes", "label": "Venta de bienes", "appliesTo": "in", "color": "tint-1" },
+        { "key": "anticipos_clientes", "label": "Anticipos de clientes", "appliesTo": "in", "color": "tint-2" },
+        { "key": "reembolsos", "label": "Reembolsos de gastos", "appliesTo": "in", "color": "tint-2" },
+        { "key": "intereses", "label": "Intereses ganados", "appliesTo": "in", "color": "tint-7" },
+        { "key": "aportes_socios", "label": "Aportes de socios", "appliesTo": "in", "color": "tint-7" },
+        { "key": "otros_ingresos", "label": "Otros ingresos", "appliesTo": "in", "color": "tint-8" },
+        { "key": "nomina", "label": "Nómina", "appliesTo": "out", "color": "tint-6" },
+        { "key": "tss", "label": "Seguridad social (TSS)", "appliesTo": "out", "color": "tint-6" },
+        { "key": "alquiler", "label": "Alquiler de oficina", "appliesTo": "out", "color": "tint-4" },
+        { "key": "servicios_basicos", "label": "Electricidad, agua e internet", "appliesTo": "out", "color": "tint-5" },
+        { "key": "software", "label": "Software y suscripciones", "appliesTo": "out", "color": "tint-3" },
+        { "key": "honorarios", "label": "Honorarios profesionales", "appliesTo": "out", "color": "tint-6" },
+        { "key": "impuestos", "label": "Impuestos (ITBIS, ISR, anticipos)", "appliesTo": "out", "color": "tint-4" },
+        { "key": "retenciones", "label": "Retenciones pagadas", "appliesTo": "out", "color": "tint-4" },
+        { "key": "publicidad", "label": "Publicidad y mercadeo", "appliesTo": "out", "color": "tint-2" },
+        { "key": "materiales", "label": "Materiales de oficina", "appliesTo": "out", "color": "tint-3" },
+        { "key": "mantenimiento", "label": "Mantenimiento", "appliesTo": "out", "color": "tint-3" },
+        { "key": "viaticos", "label": "Viáticos y transporte", "appliesTo": "out", "color": "tint-2" },
+        { "key": "gastos_bancarios", "label": "Gastos bancarios", "appliesTo": "out", "color": "tint-8" },
+        { "key": "seguros", "label": "Seguros", "appliesTo": "out", "color": "tint-5" },
+        { "key": "otros_gastos", "label": "Otros gastos", "appliesTo": "out", "color": "tint-8" }
+      ]
+    },
+    {
+      "key": "centro_costo",
+      "label": "Centro de costo",
+      "type": "list",
+      "role": "cost_center",
+      "showInList": true,
+      "options": [
+        { "key": "administracion", "label": "Administración", "color": "tint-4" },
+        { "key": "diseno", "label": "Diseño", "color": "tint-1" },
+        { "key": "produccion", "label": "Producción", "color": "tint-3" },
+        { "key": "comercial", "label": "Comercial", "color": "tint-2" }
+      ]
+    },
+    {
+      "key": "contacto",
+      "label": "Cliente o proveedor",
+      "type": "list",
+      "role": "contact",
+      "options": [
+        { "key": "cliente_ocasional", "label": "Cliente ocasional", "appliesTo": "in" },
+        { "key": "proveedor_ocasional", "label": "Proveedor ocasional", "appliesTo": "out" }
+      ]
+    },
+    {
+      "key": "metodo_pago",
+      "label": "Método de pago",
+      "type": "list",
+      "role": "payment_method",
+      "options": [
+        { "key": "transferencia", "label": "Transferencia" },
+        { "key": "cheque", "label": "Cheque" },
+        { "key": "tarjeta", "label": "Tarjeta" },
+        { "key": "deposito", "label": "Depósito" },
+        { "key": "efectivo", "label": "Efectivo" },
+        { "key": "debito_automatico", "label": "Débito automático" }
+      ]
+    },
+    { "key": "ncf", "label": "NCF", "type": "text", "role": "reference", "showInList": true },
+    { "key": "fecha_factura", "label": "Fecha de factura", "type": "date" },
+    { "key": "horas", "label": "Horas facturadas", "type": "number", "appliesTo": "in" },
+    { "key": "conciliado", "label": "Conciliado", "type": "bool", "role": "reconciled" }
+  ],
+  "views": [
+    {
+      "key": "no_conciliados",
+      "name": "No conciliados",
+      "kind": "filter",
+      "pinned": true,
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": {
+          "accountIds": ["banco_operativo", "tarjeta_empresarial"],
+          "fields": [{ "fieldId": "conciliado", "op": "is", "value": false }]
+        },
+        "columns": ["date", "account", "description", "ncf", "amount"],
+        "sort": { "by": "date", "dir": "asc" }
+      }
+    },
+    {
+      "key": "ingresos_sin_ncf",
+      "name": "Ingresos sin NCF",
+      "kind": "filter",
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": { "kinds": ["income"], "fields": [{ "fieldId": "ncf", "op": "empty" }] }
+      }
+    },
+    {
+      "key": "caja_chica_mes",
+      "name": "Caja chica del mes",
+      "kind": "filter",
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": { "period": { "preset": "this_month" }, "accountIds": ["caja_chica"] },
+        "sort": { "by": "date", "dir": "asc" }
+      }
+    },
+    {
+      "key": "gastos_por_centro",
+      "name": "Gastos por centro de costo",
+      "kind": "summary",
+      "pinned": true,
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "this_month" } },
+        "groupBy": { "by": "field", "fieldId": "centro_costo" },
+        "split": { "by": "field", "fieldId": "categoria" },
+        "measure": "out",
+        "chart": "bars"
+      }
+    },
+    {
+      "key": "ingresos_por_cliente",
+      "name": "Ingresos por cliente",
+      "kind": "summary",
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "this_year" }, "kinds": ["income"] },
+        "groupBy": { "by": "field", "fieldId": "contacto" },
+        "measure": "in",
+        "chart": "table"
+      }
+    },
+    {
+      "key": "flujo_mensual",
+      "name": "Flujo por mes",
+      "kind": "summary",
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "last_12_months" } },
+        "groupBy": { "by": "period", "unit": "month" },
+        "measure": "net",
+        "chart": "line"
+      }
+    },
+    {
+      "key": "informe_cliente",
+      "name": "Informe mensual para el cliente",
+      "kind": "report",
+      "pinned": true,
+      "recipe": {
+        "v": 1,
+        "kind": "report",
+        "form": "summary",
+        "filter": { "period": { "preset": "last_month" } },
+        "sections": ["header", "statement", "by_account", "by_field", "transfers", "signature"],
+        "groupByFieldIds": ["categoria", "centro_costo"],
+        "columns": ["date", "description", "account", "amount"],
+        "includeVoided": false,
+        "signature": true
+      }
+    },
+    {
+      "key": "relacion_gastos",
+      "name": "Relación de compras y gastos con NCF",
+      "kind": "report",
+      "recipe": {
+        "v": 1,
+        "kind": "report",
+        "form": "detailed",
+        "filter": { "period": { "preset": "last_month" }, "kinds": ["expense"] },
+        "sections": ["header", "movements"],
+        "groupByFieldIds": [],
+        "columns": ["date", "fecha_factura", "ncf", "contacto", "description", "categoria", "amount"],
+        "includeVoided": false,
+        "signature": false
+      }
+    },
+    {
+      "key": "cierre_trimestral",
+      "name": "Cierre del trimestre",
+      "kind": "report",
+      "recipe": {
+        "v": 1,
+        "kind": "report",
+        "form": "custom",
+        "filter": { "period": { "preset": "last_quarter" } },
+        "sections": ["header", "statement", "by_account", "by_field", "transfers", "voided", "audit", "signature"],
+        "groupByFieldIds": ["categoria", "centro_costo", "contacto"],
+        "columns": ["date", "seq", "account", "description", "ncf", "amount"],
+        "includeVoided": true,
+        "signature": true
+      }
+    }
+  ]
+}

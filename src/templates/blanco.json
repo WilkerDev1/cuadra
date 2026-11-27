@@ -1,0 +1,12 @@
+{
+  "format": "cuadra-template",
+  "formatVersion": 1,
+  "id": "blanco",
+  "version": 1,
+  "name": "En blanco",
+  "description": "Una caja y una categoría vacía. Tú decides las cuentas, los campos y las opciones a medida que anotas.",
+  "color": "tint-8",
+  "accounts": [{ "key": "caja", "name": "Caja", "type": "cash", "icon": "Wallet" }],
+  "fields": [{ "key": "categoria", "label": "Categoría", "type": "list", "role": "category", "showInList": true, "options": [] }],
+  "views": []
+}

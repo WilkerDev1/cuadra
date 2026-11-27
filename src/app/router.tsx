@@ -3,7 +3,9 @@ import { features as collected } from './registry/collect';
 import type { FeatureModule, FeatureRoute } from './registry/types';
 import { AppShell } from './shell/AppShell';
 import { LoadingScreen } from './shell/LoadingScreen';
+import { MorePage } from './shell/MorePage';
 import { NotFound } from './shell/NotFound';
+import { RootShell } from './shell/RootShell';
 import { WorkspaceStatus } from './shell/WorkspaceStatus';
 import { useUiStore } from './state/uiStore';
 
@@ -44,9 +46,11 @@ export function buildRoutes(features: readonly FeatureModule[]): RouteObject[] {
   const workspaceRoutes = all.filter((r) => r.scope === 'workspace').map(toRoute);
   const claimsRoot = all.some((r) => r.scope === 'root' && r.path === '');
   const claimsWorkspaceIndex = all.some((r) => r.scope === 'workspace' && r.path === '');
+  // «Más» es del shell (la página móvil con lo que no cabe en la barra inferior): ninguna feature la define.
+  const more: RouteObject = { path: 'mas', element: <MorePage />, handle: { presentation: 'page', titleKey: 'common.more.title' } satisfies RouteHandle };
   const workspaceChildren: RouteObject[] = claimsWorkspaceIndex
-    ? workspaceRoutes
-    : [{ index: true, element: <WorkspaceStatus /> }, ...workspaceRoutes];
+    ? [more, ...workspaceRoutes]
+    : [{ index: true, element: <WorkspaceStatus /> }, more, ...workspaceRoutes];
   return [
     {
       path: '/',
@@ -54,8 +58,11 @@ export function buildRoutes(features: readonly FeatureModule[]): RouteObject[] {
       // Las rutas de las features son lazy: mientras carga la primera, el arranque se ve igual que boot.
       hydrateFallbackElement: <LoadingScreen />,
       children: [
-        ...(claimsRoot ? [] : [{ index: true, element: <RootRedirect /> } satisfies RouteObject]),
-        ...rootRoutes,
+        // Las rutas de la raíz comparten el marco sin navegación de espacio (avisos, atajos, paleta, toasts).
+        {
+          element: <RootShell />,
+          children: [...(claimsRoot ? [] : [{ index: true, element: <RootRedirect /> } satisfies RouteObject]), ...rootRoutes],
+        },
         { path: 'atajo/:tipo', element: <ShortcutRedirect /> },
         { path: 'e/:wsId', element: <AppShell />, children: workspaceChildren },
         { path: '*', element: <NotFound /> },

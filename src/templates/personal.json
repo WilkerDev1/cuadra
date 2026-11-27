@@ -1,0 +1,131 @@
+{
+  "format": "cuadra-template",
+  "formatVersion": 1,
+  "id": "personal",
+  "version": 1,
+  "name": "Finanzas personales",
+  "description": "Para la casa: efectivo, cuenta bancaria, ahorros y tarjeta, con categorías del día a día, método de pago, comercio o persona, fecha de vencimiento de facturas y conciliación con el estado de cuenta.",
+  "color": "tint-4",
+  "currency": { "code": "DOP", "minorDigits": 2, "symbol": "RD$" },
+  "accounts": [
+    { "key": "efectivo", "name": "Efectivo", "type": "wallet", "icon": "Wallet" },
+    { "key": "cuenta", "name": "Cuenta bancaria", "type": "bank", "icon": "Landmark" },
+    { "key": "ahorros", "name": "Ahorros", "type": "savings", "icon": "PiggyBank" },
+    { "key": "tarjeta", "name": "Tarjeta de crédito", "type": "card", "icon": "CreditCard" }
+  ],
+  "fields": [
+    {
+      "key": "categoria",
+      "label": "Categoría",
+      "type": "list",
+      "role": "category",
+      "showInList": true,
+      "options": [
+        { "key": "salario", "label": "Salario", "appliesTo": "in", "color": "tint-1" },
+        { "key": "ingresos_extra", "label": "Trabajos extra", "appliesTo": "in", "color": "tint-1" },
+        { "key": "remesas", "label": "Remesas recibidas", "appliesTo": "in", "color": "tint-2" },
+        { "key": "regalos_recibidos", "label": "Regalos recibidos", "appliesTo": "in", "color": "tint-7" },
+        { "key": "intereses", "label": "Intereses", "appliesTo": "in", "color": "tint-7" },
+        { "key": "otros_ingresos", "label": "Otros ingresos", "appliesTo": "in", "color": "tint-8" },
+        { "key": "supermercado", "label": "Supermercado y colmado", "appliesTo": "out", "color": "tint-3" },
+        { "key": "vivienda", "label": "Alquiler o hipoteca", "appliesTo": "out", "color": "tint-4" },
+        { "key": "servicios", "label": "Luz, agua, gas e internet", "appliesTo": "out", "color": "tint-5" },
+        { "key": "telefono", "label": "Teléfono", "appliesTo": "out", "color": "tint-5" },
+        { "key": "transporte", "label": "Transporte y combustible", "appliesTo": "out", "color": "tint-2" },
+        { "key": "salud", "label": "Salud y farmacia", "appliesTo": "out", "color": "tint-6" },
+        { "key": "seguro", "label": "Seguro médico", "appliesTo": "out", "color": "tint-6" },
+        { "key": "educacion", "label": "Educación", "appliesTo": "out", "color": "tint-1" },
+        { "key": "restaurantes", "label": "Restaurantes y salidas", "appliesTo": "out", "color": "tint-2" },
+        { "key": "ropa", "label": "Ropa y calzado", "appliesTo": "out", "color": "tint-3" },
+        { "key": "hogar", "label": "Hogar", "appliesTo": "out", "color": "tint-4" },
+        { "key": "suscripciones", "label": "Suscripciones", "appliesTo": "out", "color": "tint-5" },
+        { "key": "deudas", "label": "Pago de préstamos", "appliesTo": "out", "color": "tint-7" },
+        { "key": "regalos_donaciones", "label": "Regalos y donaciones", "appliesTo": "out", "color": "tint-7" },
+        { "key": "otros_gastos", "label": "Otros gastos", "appliesTo": "out", "color": "tint-8" }
+      ]
+    },
+    {
+      "key": "metodo_pago",
+      "label": "Método de pago",
+      "type": "list",
+      "role": "payment_method",
+      "options": [
+        { "key": "efectivo", "label": "Efectivo" },
+        { "key": "tarjeta_debito", "label": "Tarjeta de débito" },
+        { "key": "tarjeta_credito", "label": "Tarjeta de crédito" },
+        { "key": "transferencia", "label": "Transferencia" },
+        { "key": "pago_movil", "label": "Pago móvil" }
+      ]
+    },
+    { "key": "comercio", "label": "Comercio o persona", "type": "list", "role": "contact", "options": [] },
+    { "key": "vencimiento", "label": "Fecha de vencimiento", "type": "date", "appliesTo": "out" },
+    { "key": "imprevisto", "label": "Imprevisto", "type": "bool", "appliesTo": "out" },
+    { "key": "conciliado", "label": "Conciliado", "type": "bool", "role": "reconciled" }
+  ],
+  "views": [
+    {
+      "key": "imprevistos",
+      "name": "Gastos imprevistos",
+      "kind": "filter",
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": { "period": { "preset": "this_year" }, "fields": [{ "fieldId": "imprevisto", "op": "is", "value": true }] }
+      }
+    },
+    {
+      "key": "tarjeta_sin_conciliar",
+      "name": "Tarjeta sin conciliar",
+      "kind": "filter",
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": { "accountIds": ["tarjeta"], "fields": [{ "fieldId": "conciliado", "op": "is", "value": false }] },
+        "sort": { "by": "date", "dir": "asc" }
+      }
+    },
+    {
+      "key": "gastos_del_mes",
+      "name": "En qué se fue el dinero",
+      "kind": "summary",
+      "pinned": true,
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "this_month" } },
+        "groupBy": { "by": "field", "fieldId": "categoria" },
+        "measure": "out",
+        "chart": "donut"
+      }
+    },
+    {
+      "key": "flujo_mensual",
+      "name": "Entradas y salidas por mes",
+      "kind": "summary",
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "last_12_months" } },
+        "groupBy": { "by": "period", "unit": "month" },
+        "measure": "both",
+        "chart": "bars"
+      }
+    },
+    {
+      "key": "resumen_mes",
+      "name": "Resumen del mes pasado",
+      "kind": "report",
+      "recipe": {
+        "v": 1,
+        "kind": "report",
+        "form": "summary",
+        "filter": { "period": { "preset": "last_month" } },
+        "sections": ["header", "statement", "by_account", "by_field"],
+        "groupByFieldIds": ["categoria"],
+        "columns": ["date", "description", "account", "amount"],
+        "includeVoided": false,
+        "signature": false
+      }
+    }
+  ]
+}

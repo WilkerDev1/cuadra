@@ -1,0 +1,216 @@
+{
+  "format": "cuadra-template",
+  "formatVersion": 1,
+  "id": "negocio",
+  "version": 1,
+  "name": "Negocio pequeño",
+  "description": "Colmado, tienda, salón o taller: caja, banco y tarjeta, con categorías de ventas y gastos, método de pago, clientes y proveedores, comprobante fiscal y conciliación.",
+  "color": "tint-1",
+  "currency": { "code": "DOP", "minorDigits": 2, "symbol": "RD$" },
+  "accounts": [
+    { "key": "caja", "name": "Caja", "type": "cash", "icon": "Wallet" },
+    { "key": "banco", "name": "Banco", "type": "bank", "icon": "Landmark" },
+    { "key": "tarjeta", "name": "Tarjeta de crédito", "type": "card", "icon": "CreditCard" }
+  ],
+  "fields": [
+    {
+      "key": "categoria",
+      "label": "Categoría",
+      "type": "list",
+      "role": "category",
+      "showInList": true,
+      "options": [
+        { "key": "ventas", "label": "Ventas", "appliesTo": "in", "color": "tint-1" },
+        { "key": "cobros_credito", "label": "Cobros de ventas a crédito", "appliesTo": "in", "color": "tint-1" },
+        { "key": "servicios", "label": "Servicios y recargas", "appliesTo": "in", "color": "tint-2" },
+        { "key": "aporte_dueno", "label": "Aporte del dueño", "appliesTo": "in", "color": "tint-7" },
+        { "key": "prestamo_recibido", "label": "Préstamo recibido", "appliesTo": "in", "color": "tint-7" },
+        { "key": "otros_ingresos", "label": "Otros ingresos", "appliesTo": "in", "color": "tint-8" },
+        { "key": "mercancia", "label": "Compra de mercancía", "appliesTo": "out", "color": "tint-3" },
+        { "key": "alquiler", "label": "Alquiler del local", "appliesTo": "out", "color": "tint-4" },
+        { "key": "electricidad", "label": "Electricidad", "appliesTo": "out", "color": "tint-5" },
+        { "key": "agua", "label": "Agua", "appliesTo": "out", "color": "tint-5" },
+        { "key": "internet", "label": "Internet y teléfono", "appliesTo": "out", "color": "tint-5" },
+        { "key": "nomina", "label": "Nómina", "appliesTo": "out", "color": "tint-6" },
+        { "key": "impuestos", "label": "Impuestos (ITBIS, anticipos)", "appliesTo": "out", "color": "tint-4" },
+        { "key": "contador", "label": "Honorarios del contador", "appliesTo": "out", "color": "tint-6" },
+        { "key": "transporte", "label": "Transporte y combustible", "appliesTo": "out", "color": "tint-2" },
+        { "key": "mantenimiento", "label": "Mantenimiento y reparaciones", "appliesTo": "out", "color": "tint-3" },
+        { "key": "suministros", "label": "Suministros y empaques", "appliesTo": "out", "color": "tint-3" },
+        { "key": "publicidad", "label": "Publicidad", "appliesTo": "out", "color": "tint-2" },
+        { "key": "comisiones", "label": "Comisiones bancarias", "appliesTo": "out", "color": "tint-8" },
+        { "key": "pago_prestamo", "label": "Pago de préstamo", "appliesTo": "out", "color": "tint-7" },
+        { "key": "retiro_dueno", "label": "Retiro del dueño", "appliesTo": "out", "color": "tint-7" },
+        { "key": "otros_gastos", "label": "Otros gastos", "appliesTo": "out", "color": "tint-8" }
+      ]
+    },
+    {
+      "key": "metodo_pago",
+      "label": "Método de pago",
+      "type": "list",
+      "role": "payment_method",
+      "options": [
+        { "key": "efectivo", "label": "Efectivo" },
+        { "key": "transferencia", "label": "Transferencia" },
+        { "key": "tarjeta_debito", "label": "Tarjeta de débito" },
+        { "key": "tarjeta_credito", "label": "Tarjeta de crédito" },
+        { "key": "pago_movil", "label": "Pago móvil" },
+        { "key": "cheque", "label": "Cheque" },
+        { "key": "credito", "label": "A crédito (fiado)" }
+      ]
+    },
+    {
+      "key": "contacto",
+      "label": "Cliente o proveedor",
+      "type": "list",
+      "role": "contact",
+      "options": [
+        { "key": "cliente_contado", "label": "Cliente al contado", "appliesTo": "in" },
+        { "key": "proveedor_varios", "label": "Proveedor ocasional", "appliesTo": "out" }
+      ]
+    },
+    { "key": "comprobante", "label": "Comprobante (NCF o factura)", "type": "text", "role": "reference", "showInList": true },
+    { "key": "vencimiento", "label": "Fecha de vencimiento", "type": "date", "appliesTo": "out" },
+    { "key": "conciliado", "label": "Conciliado", "type": "bool", "role": "reconciled" }
+  ],
+  "views": [
+    {
+      "key": "gastos_mes",
+      "name": "Gastos de este mes",
+      "kind": "filter",
+      "pinned": true,
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": { "period": { "preset": "this_month" }, "kinds": ["expense"] },
+        "columns": ["date", "description", "categoria", "metodo_pago", "amount"],
+        "sort": { "by": "amount", "dir": "desc" }
+      }
+    },
+    {
+      "key": "banco_sin_conciliar",
+      "name": "Banco sin conciliar",
+      "kind": "filter",
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": { "accountIds": ["banco"], "fields": [{ "fieldId": "conciliado", "op": "is", "value": false }] },
+        "sort": { "by": "date", "dir": "asc" }
+      }
+    },
+    {
+      "key": "compras_sin_comprobante",
+      "name": "Compras sin comprobante",
+      "kind": "filter",
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": {
+          "kinds": ["expense"],
+          "fields": [
+            { "fieldId": "categoria", "op": "any_of", "optionIds": ["mercancia", "suministros"] },
+            { "fieldId": "comprobante", "op": "empty" }
+          ]
+        }
+      }
+    },
+    {
+      "key": "ventas_fiadas",
+      "name": "Ventas y compras a crédito",
+      "kind": "filter",
+      "recipe": {
+        "v": 1,
+        "kind": "filter",
+        "filter": { "fields": [{ "fieldId": "metodo_pago", "op": "any_of", "optionIds": ["credito"] }] },
+        "columns": ["date", "description", "contacto", "vencimiento", "amount"]
+      }
+    },
+    {
+      "key": "gastos_por_categoria",
+      "name": "Gastos por categoría",
+      "kind": "summary",
+      "pinned": true,
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "this_month" } },
+        "groupBy": { "by": "field", "fieldId": "categoria" },
+        "measure": "out",
+        "chart": "donut"
+      }
+    },
+    {
+      "key": "flujo_mensual",
+      "name": "Entradas y salidas por mes",
+      "kind": "summary",
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "last_12_months" } },
+        "groupBy": { "by": "period", "unit": "month" },
+        "measure": "both",
+        "chart": "bars"
+      }
+    },
+    {
+      "key": "ventas_por_metodo",
+      "name": "Ventas por método de pago",
+      "kind": "summary",
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "this_month" }, "kinds": ["income"] },
+        "groupBy": { "by": "field", "fieldId": "metodo_pago" },
+        "measure": "in",
+        "chart": "bars"
+      }
+    },
+    {
+      "key": "compras_por_proveedor",
+      "name": "Compras por proveedor",
+      "kind": "summary",
+      "recipe": {
+        "v": 1,
+        "kind": "summary",
+        "filter": { "period": { "preset": "this_year" }, "kinds": ["expense"] },
+        "groupBy": { "by": "field", "fieldId": "contacto" },
+        "split": { "by": "period", "unit": "month" },
+        "measure": "out",
+        "chart": "table"
+      }
+    },
+    {
+      "key": "estado_mensual",
+      "name": "Estado del mes pasado",
+      "kind": "report",
+      "pinned": true,
+      "recipe": {
+        "v": 1,
+        "kind": "report",
+        "form": "summary",
+        "filter": { "period": { "preset": "last_month" } },
+        "sections": ["header", "statement", "by_account", "by_field", "transfers", "signature"],
+        "groupByFieldIds": ["categoria"],
+        "columns": ["date", "description", "account", "amount"],
+        "includeVoided": false,
+        "signature": true
+      }
+    },
+    {
+      "key": "libro_detallado",
+      "name": "Libro detallado del mes",
+      "kind": "report",
+      "recipe": {
+        "v": 1,
+        "kind": "report",
+        "form": "detailed",
+        "filter": { "period": { "preset": "this_month" } },
+        "sections": ["header", "statement", "by_account", "movements", "voided"],
+        "groupByFieldIds": ["categoria", "metodo_pago"],
+        "columns": ["date", "seq", "account", "description", "categoria", "metodo_pago", "comprobante", "amount"],
+        "includeVoided": true,
+        "signature": false
+      }
+    }
+  ]
+}

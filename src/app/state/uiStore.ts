@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Id } from '../../core';
+import { applyTheme } from './theme';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
@@ -8,13 +9,21 @@ export interface Toast {
   id: number;
   /** Clave i18n del mensaje. */
   message: string;
+  /** Parámetros de interpolación del mensaje. */
+  params?: Record<string, string | number>;
+  /** `warn`: aviso que no exige acción (errores traducidos de una mutación). */
+  tone?: 'info' | 'warn';
   undo?: () => void;
 }
+
+/** Superficies que se abren desde atajos o botones de distintas partes del shell. */
+export type Overlay = 'palette' | 'help' | 'fab';
 
 interface UiState {
   theme: ThemeChoice;
   lastWorkspaceId: Id | null;
   toasts: Toast[];
+  overlay: Overlay | null;
   /** Hay una versión nueva del service worker lista para activarse. */
   updateReady: boolean;
   applyUpdate: (() => void) | null;
@@ -23,6 +32,8 @@ interface UiState {
   pushToast(toast: Omit<Toast, 'id'>): number;
   dismissToast(id: number): void;
   setUpdateReady(apply: (() => void) | null): void;
+  openOverlay(overlay: Overlay): void;
+  closeOverlay(overlay?: Overlay): void;
 }
 
 let toastSeq = 0;
@@ -41,6 +52,7 @@ export const useUiStore = create<UiState>()(
       theme: 'system',
       lastWorkspaceId: null,
       toasts: [],
+      overlay: null,
       updateReady: false,
       applyUpdate: null,
       setTheme: (theme) => set({ theme }),
@@ -53,6 +65,8 @@ export const useUiStore = create<UiState>()(
       },
       dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) })),
       setUpdateReady: (applyUpdate) => set({ updateReady: applyUpdate !== null, applyUpdate }),
+      openOverlay: (overlay) => set({ overlay }),
+      closeOverlay: (overlay) => set((s) => (overlay === undefined || s.overlay === overlay ? { overlay: null } : s)),
     }),
     {
       name: 'cuadra.ui',
@@ -85,3 +99,11 @@ export const useUiStore = create<UiState>()(
     },
   ),
 );
+
+// El tema se aplica nada más cargar el módulo (antes de que la base abra) y con cada cambio: sin parpadeo de claro a oscuro.
+if (typeof document !== 'undefined') {
+  applyTheme(useUiStore.getState().theme);
+  useUiStore.subscribe((state, prev) => {
+    if (state.theme !== prev.theme) applyTheme(state.theme);
+  });
+}

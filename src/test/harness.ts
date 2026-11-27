@@ -29,7 +29,8 @@ export async function createTestCuadra(opts: { today?: IsoDate; seed?: number } 
   const driver = await openNodeDriver({ path: ':memory:' });
   try {
     const { to } = await migrate(driver, { now: () => clock.now() });
-    const cuadra = createCuadra({ driver, clock, ids, locale: 'es-DO', schemaVersion: to });
+    // PBKDF2 con pocas iteraciones: las pruebas de contraseña y respaldos cifrados van rápidas.
+    const cuadra = createCuadra({ driver, clock, ids, locale: 'es-DO', schemaVersion: to, pbkdf2Iterations: 1_000 });
     return { cuadra, driver, clock, ids };
   } catch (error) {
     await driver.close();
